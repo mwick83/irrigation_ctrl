@@ -1,0 +1,11 @@
+*~
+*.old
+*.bak
+*.o
+*.elf
+*.hex
+*.map
+build/
+.tags
+.tags1
+.vscode/

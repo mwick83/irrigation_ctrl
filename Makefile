@@ -1,0 +1,13 @@
+#
+# This is a project Makefile. It is assumed the directory this Makefile resides in is a
+# project subdirectory.
+#
+
+PROJECT_NAME := irrigation_ctrl
+
+CFLAGS += -DCONFIG_MONGOOSE_PRESENT -DMG_ENABLE_HTTP_STREAMING_MULTIPART -DMG_ENABLE_FILESYSTEM -DMG_DISABLE_DIRECTORY_LISTING=1 -DMG_DISABLE_DAV=1 -DMG_DISABLE_CGI=1
+CXXFLAGS += -DCONFIG_MONGOOSE_PRESENT -DMG_ENABLE_HTTP_STREAMING_MULTIPART -DMG_ENABLE_FILESYSTEM -DMG_DISABLE_DIRECTORY_LISTING=1 -DMG_DISABLE_DAV=1 -DMG_DISABLE_CGI=1
+
+GIT_VERSION := $(shell git describe --abbrev=8 --dirty --always --tags)
+
+include $(IDF_PATH)/make/project.mk
