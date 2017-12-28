@@ -20,6 +20,7 @@
 #include "serialPacketizer.h"
 #include "fillSensorProtoHandler.h"
 #include "console.h"
+#include "powerManager.h"
 //#include "WebServer.h"
 
 
@@ -43,6 +44,8 @@ static uint8_t mac_addr[6];
 FillSensorPacketizer* fillSensorPacketizer;
 FillSensorProtoHandler<FillSensorPacketizer>* fillSensorProto;
 
+// power manager
+PowerManager pwrMgr;
 
 // ********************************************************************
 // WiFi handling
@@ -409,6 +412,7 @@ extern "C" void app_main()
 
     //uint8_t fillLevelReqData[1] = {0x01};
     int fillLevel;
+    float battVoltage;
 
     timeEvents = xEventGroupCreate();
 
@@ -439,9 +443,11 @@ extern "C" void app_main()
     ConsoleInit(true, ConsoleStartHook, ConsoleExitHook);
 
     while(1) {
-        //fillSensorPacketizer->transmitData(1, fillLevelReqData, true);
-        fillLevel = fillSensorProto->getFillLevel();
-        ESP_LOGI(LOG_TAG_MAIN_CFG, "Fill level: %d", fillLevel);
+        //fillLevel = fillSensorProto->getFillLevel();
+        //ESP_LOGI(LOG_TAG_MAIN_CFG, "Fill level: %d", fillLevel);
+
+        battVoltage = pwrMgr.getSupplyVoltageMilli();
+        ESP_LOGI(LOG_TAG_MAIN_CFG, "Batt voltage: %02.3f", battVoltage * 0.001f);
 
         vTaskDelay(pdMS_TO_TICKS(5000));
     }

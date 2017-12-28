@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 #include "driver/uart.h"
+#include "driver/adc.h"
+
 
 static const int heartbeatLedPin = 2;
 
@@ -27,5 +29,7 @@ static const uart_port_t consolePortNum = UART_NUM_0;
 // static const int consolePortRxPin = 16;
 // static const int consolePortTxPin = 17;
 
+
+static const adc1_channel_t battVoltageChannel = ADC1_CHANNEL_7; // GPIO35 // TBD: switch to ADC1_GPIO35_CHANNEL with esp-idf-3.0
 
 #endif /* HARDWARE_CONFIG_H */
