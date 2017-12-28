@@ -39,7 +39,7 @@ float PowerManager::getSupplyVoltageMilli(void)
 
     if(adcRaw > -1) {
         millis = millis>>3;
-        //ESP_LOGD(LOG_TAG_POWER_MANAGER, "batt voltage filtered, calibrated from ADC: %04d mV", millis);
+        ESP_LOGD(LOG_TAG_POWER_MANAGER, "batt voltage filtered, calibrated from ADC: %04d mV", millis);
         result = millis * battVoltageMult;
     } else {
         ESP_LOGE(LOG_TAG_POWER_MANAGER, "Error occurred during ADC conversion (batt voltage).");
