@@ -371,7 +371,7 @@ void sntp_task(void* params)
 
     while(timeinfo.tm_year < (2017 - 1900)) {
         ESP_LOGI(LOG_TAG_TIME, "Waiting for system time to be set.");
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        vTaskDelay(pdMS_TO_TICKS(2000));
         time(&now);
         localtime_r(&now, &timeinfo);
     }
@@ -383,7 +383,7 @@ void sntp_task(void* params)
         localtime_r(&now, &timeinfo);
         strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
         ESP_LOGI(LOG_TAG_TIME, "Current time: %s", strftime_buf);
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 
     vTaskDelete(NULL);
@@ -443,6 +443,6 @@ extern "C" void app_main()
         fillLevel = fillSensorProto->getFillLevel();
         ESP_LOGI(LOG_TAG_MAIN_CFG, "Fill level: %d", fillLevel);
 
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }

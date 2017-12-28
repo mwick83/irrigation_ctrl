@@ -63,7 +63,7 @@ public:
         int fillLevel = -1;
 
         //TickType_t wait = portMAX_DELAY;
-        TickType_t wait = 1000 / portTICK_PERIOD_MS;
+        TickType_t wait = pdMS_TO_TICKS(1000);
 
         if(!packetizerInitialized) return -1;
 

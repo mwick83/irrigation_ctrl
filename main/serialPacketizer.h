@@ -41,7 +41,7 @@ private:
 
     QueueHandle_t rxDriverQueue;
 
-    static const BaseType_t queueWaitTime = 50 / portTICK_PERIOD_MS;
+    static const BaseType_t queueWaitTime = pdMS_TO_TICKS(50);
 
     // rx related state+buffers
     BUFFER_T rxBuffer;
@@ -82,7 +82,7 @@ private:
 
         while(1) {
             // TBD: add stop request signal
-            activeQueue = xQueueSelectFromSet(caller->procQueueSet, 200 / portTICK_PERIOD_MS);
+            activeQueue = xQueueSelectFromSet(caller->procQueueSet, pdMS_TO_TICKS(200));
             if(activeQueue == caller->rxDriverQueue) {
                 xQueueReceive(activeQueue, &uart_event, portMAX_DELAY); // no blocking, because select ensures it is available
                 if(uart_event.type == UART_DATA) {
