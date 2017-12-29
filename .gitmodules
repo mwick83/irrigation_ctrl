@@ -1,3 +1,6 @@
 [submodule "components/mongoose"]
 	path = components/mongoose
 	url = https://github.com/cesanta/mongoose.git
+[submodule "components/espmqtt"]
+	path = components/espmqtt
+	url = https://github.com/mwick83/espmqtt
