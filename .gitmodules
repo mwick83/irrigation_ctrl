@@ -4,3 +4,6 @@
 [submodule "components/espmqtt"]
 	path = components/espmqtt
 	url = https://github.com/mwick83/espmqtt
+[submodule "components/console-esp32"]
+	path = components/console-esp32
+	url = https://github.com/mwick83/console-esp32
