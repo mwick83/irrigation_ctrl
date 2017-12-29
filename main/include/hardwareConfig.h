@@ -30,6 +30,15 @@ static const uart_port_t consolePortNum = UART_NUM_0;
 // static const int consolePortTxPin = 17;
 
 
-static const adc1_channel_t battVoltageChannel = ADC1_CHANNEL_7; // GPIO35 // TBD: switch to ADC1_GPIO35_CHANNEL with esp-idf-3.0
+static const adc1_channel_t battVoltageChannel = ADC1_GPIO35_CHANNEL;
+
+static const gpio_num_t peripheralEnGpioNum = GPIO_NUM_2;
+static const gpio_num_t peripheralExtSupplyGpioNum = GPIO_NUM_25;
+
+static const gpio_num_t irrigationMainGpioNum = GPIO_NUM_4;
+static const gpio_num_t irrigationAux0GpioNum = GPIO_NUM_27;
+static const gpio_num_t irrigationAux1GpioNum = GPIO_NUM_26;
+
+static const gpio_num_t keepAwakeGpioNum = GPIO_NUM_34;
 
 #endif /* HARDWARE_CONFIG_H */
