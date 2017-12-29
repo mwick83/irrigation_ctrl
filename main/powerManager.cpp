@@ -28,13 +28,14 @@ float PowerManager::getSupplyVoltageMilli(void)
     float result = NAN;
     int sampleCnt;
 
-    for(sampleCnt = 0; sampleCnt < 8; sampleCnt++) {
-        adcRaw = adc1_get_voltage(battVoltageChannel);
+    for(sampleCnt = 7; sampleCnt >= 0; sampleCnt--) {
+        adcRaw = adc1_get_raw(battVoltageChannel);
         if(adcRaw > -1) {
             millis += esp_adc_cal_raw_to_voltage(adcRaw, &battVoltageAdcCharacteristics);
         } else {
             break;
         }
+        if(sampleCnt > 0) vTaskDelay(pdMS_TO_TICKS(10));
     }
 
     if(adcRaw > -1) {
