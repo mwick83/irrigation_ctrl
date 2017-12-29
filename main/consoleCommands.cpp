@@ -83,7 +83,7 @@ static eCommandResult_T ConsoleCommandIoDir(const char buffer[])
     eCommandResult_T result = COMMAND_SUCCESS;
     esp_err_t resultSet = ESP_FAIL;
     int16_t ioNum, ioMode;
-    char outStr[22];
+    static char outStr[22];
 
     result = ConsoleReceiveParamInt16(buffer, 1, &ioNum);
     if(COMMAND_SUCCESS == result) result = ConsoleReceiveParamInt16(buffer, 2, &ioMode);
@@ -115,7 +115,7 @@ static eCommandResult_T ConsoleCommandIoSet(const char buffer[])
     eCommandResult_T result = COMMAND_SUCCESS;
     esp_err_t resultSet = ESP_FAIL;
     int16_t ioNum, ioVal;
-    char outStr[18];
+    static char outStr[18];
 
     result = ConsoleReceiveParamInt16(buffer, 1, &ioNum);
     if(COMMAND_SUCCESS == result) result = ConsoleReceiveParamInt16(buffer, 2, &ioVal);
@@ -145,7 +145,7 @@ static eCommandResult_T ConsoleCommandIoGet(const char buffer[])
     eCommandResult_T result = COMMAND_SUCCESS;
     int16_t ioNum;
     int ioVal;
-    char outStr[20];
+    static char outStr[20];
 
     result = ConsoleReceiveParamInt16(buffer, 1, &ioNum);
     if((ioNum < 0) || (ioNum > 40)) result = COMMAND_PARAMETER_ERROR;
