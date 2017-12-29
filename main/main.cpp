@@ -10,7 +10,6 @@
 #include "esp_wifi.h"
 #include "esp_event_loop.h"
 #include "esp_log.h"
-#include "esp_deep_sleep.h"
 #include "nvs_flash.h"
 
 #include "apps/sntp/sntp.h"
@@ -458,8 +457,10 @@ extern "C" void app_main()
         //ESP_LOGI(LOG_TAG_MAIN_CFG, "Fill level: %d", fillLevel);
 
         battVoltage = pwrMgr.getSupplyVoltageMilli();
-        ESP_LOGI(LOG_TAG_MAIN_CFG, "Batt voltage: %02.3f", battVoltage * 0.001f);
+        ESP_LOGI(LOG_TAG_MAIN_CFG, "Batt voltage: %02.2f V", roundf(battVoltage * 0.1f) * 0.01f);
 
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        if(((xEventGroupGetBits(timeEvents) & timeSet) == 0) || !pwrMgr.gotoSleep()) {
+            vTaskDelay(pdMS_TO_TICKS(5000));
+        }
     }
 }
