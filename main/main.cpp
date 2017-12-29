@@ -396,14 +396,17 @@ void sntp_task(void* params)
 // ********************************************************************
 // app_main
 // ********************************************************************
+//static vprintf_like_t previousLogVprintf;
 void ConsoleStartHook(void)
 {
     esp_log_level_set("*", ESP_LOG_WARN);
+    // alternative: previousLogVprintf = esp_log_set_vprintf();
 }
 
 void ConsoleExitHook(void)
 {
     esp_log_level_set("*", (esp_log_level_t) CONFIG_LOG_DEFAULT_LEVEL);
+    // alternaive: esp_log_set_vprintf(previousLogVprintf);
 }
 
 extern "C" void app_main()
