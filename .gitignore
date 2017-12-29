@@ -9,3 +9,4 @@ build/
 .tags
 .tags1
 .vscode/
+unused_code/
