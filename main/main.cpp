@@ -342,15 +342,25 @@ esp_err_t mqtt_prepare_settings(void)
 }
 
 // ********************************************************************
-// sntp_task
+// Time keeping
 // ********************************************************************
-void sntp_task(void* params)
-{
-    char strftime_buf[64];
-
-    ESP_LOGI(LOG_TAG_TIME, "Checking if time is already set.");
+void print_time(void) {
+    static char strftime_buf[64];
     time_t now;
     struct tm timeinfo;
+
+    time(&now);
+    localtime_r(&now, &timeinfo);
+    strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+    ESP_LOGI(LOG_TAG_TIME, "Current time: %s", strftime_buf);
+}
+
+void sntp_task(void* params)
+{
+    time_t now;
+    struct tm timeinfo;
+
+    ESP_LOGI(LOG_TAG_TIME, "Checking if time is already set.");
     time(&now);
 
     // set correct timezone
@@ -362,6 +372,7 @@ void sntp_task(void* params)
     if(!(timeinfo.tm_year < (2017 - 1900))) {
         ESP_LOGI(LOG_TAG_TIME, "-> Time already set. Setting timeEvents.");
         xEventGroupSetBits(timeEvents, timeSet);
+        print_time();
     } else {
         ESP_LOGI(LOG_TAG_TIME, "-> Time not set.");
     }
@@ -384,10 +395,7 @@ void sntp_task(void* params)
         ESP_LOGI(LOG_TAG_TIME, "Time set. Setting timeEvents.");
         xEventGroupSetBits(timeEvents, timeSet);
 
-        time(&now);
-        localtime_r(&now, &timeinfo);
-        strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-        ESP_LOGI(LOG_TAG_TIME, "Current time: %s", strftime_buf);
+        print_time();
 
         // wait for potential connection loss
         xEventGroupWaitBits(wifiEvents, wifiEventDisconnected, false, true, portMAX_DELAY);
