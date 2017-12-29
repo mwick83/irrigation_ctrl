@@ -30,6 +30,7 @@
 // event group to signal WiFi events
 static EventGroupHandle_t wifiEvents;
 const int wifiEventConnected = (1<<0);
+const int wifiEventDisconnected = (1<<1);
 
 static EventGroupHandle_t timeEvents;
 const int timeSet = (1<<0);
@@ -58,6 +59,7 @@ static esp_err_t wifiEventHandler(void *ctx, system_event_t *event)
             break;
         case SYSTEM_EVENT_STA_GOT_IP:
             xEventGroupSetBits(wifiEvents, wifiEventConnected);
+            xEventGroupClearBits(wifiEvents, wifiEventDisconnected);
             mqttClient = mqtt_start(&mqttSettings); // TBD: to main loop
             break;
         case SYSTEM_EVENT_STA_DISCONNECTED:
@@ -65,6 +67,7 @@ static esp_err_t wifiEventHandler(void *ctx, system_event_t *event)
             auto-reassociate. */
             esp_wifi_connect();
             xEventGroupClearBits(wifiEvents, wifiEventConnected);
+            xEventGroupSetBits(wifiEvents, wifiEventDisconnected);
             mqtt_stop(); // TBD: to main loop
             break;
         default:
@@ -346,9 +349,6 @@ void sntp_task(void* params)
 {
     char strftime_buf[64];
 
-    // wait being online
-    xEventGroupWaitBits(wifiEvents, wifiEventConnected, false, true, portMAX_DELAY);
-
     ESP_LOGI(LOG_TAG_TIME, "Checking if time is already set.");
     time_t now;
     struct tm timeinfo;
@@ -367,26 +367,34 @@ void sntp_task(void* params)
         ESP_LOGI(LOG_TAG_TIME, "-> Time not set.");
     }
 
-    ESP_LOGI(LOG_TAG_TIME, "Initializing SNTP.");
-    sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, (char*) "de.pool.ntp.org");
-    sntp_init();
-
-    while(timeinfo.tm_year < (2017 - 1900)) {
-        ESP_LOGI(LOG_TAG_TIME, "Waiting for system time to be set.");
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        time(&now);
-        localtime_r(&now, &timeinfo);
-    }
-    ESP_LOGI(LOG_TAG_TIME, "Time set. Setting timeEvents.");
-    xEventGroupSetBits(timeEvents, timeSet);
-
     while(1) {
+        // wait being online
+        xEventGroupWaitBits(wifiEvents, wifiEventConnected, false, true, portMAX_DELAY);
+
+        ESP_LOGI(LOG_TAG_TIME, "WiFi connect detected. Initializing SNTP.");
+        sntp_setoperatingmode(SNTP_OPMODE_POLL);
+        sntp_setservername(0, (char*) "de.pool.ntp.org");
+        sntp_init();
+
+        while(timeinfo.tm_year < (2017 - 1900)) {
+            ESP_LOGI(LOG_TAG_TIME, "Waiting for system time to be set.");
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            time(&now);
+            localtime_r(&now, &timeinfo);
+        }
+        ESP_LOGI(LOG_TAG_TIME, "Time set. Setting timeEvents.");
+        xEventGroupSetBits(timeEvents, timeSet);
+
         time(&now);
         localtime_r(&now, &timeinfo);
         strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
         ESP_LOGI(LOG_TAG_TIME, "Current time: %s", strftime_buf);
-        vTaskDelay(pdMS_TO_TICKS(2000));
+
+        // wait for potential connection loss
+        xEventGroupWaitBits(wifiEvents, wifiEventDisconnected, false, true, portMAX_DELAY);
+
+        ESP_LOGI(LOG_TAG_TIME, "WiFi disconnect detected. Stopping SNTP.");
+        sntp_stop();
     }
 
     vTaskDelete(NULL);
