@@ -20,14 +20,16 @@
 #include "fillSensorProtoHandler.h"
 #include "console.h"
 #include "powerManager.h"
+#include "wifiEvents.h"
 //#include "WebServer.h"
 
 
 // ********************************************************************
 // global objects, vars and prototypes
 // ********************************************************************
+// TBD: encapsulate Wifi events/system/handling
 // event group to signal WiFi events
-static EventGroupHandle_t wifiEvents;
+EventGroupHandle_t wifiEvents;
 const int wifiEventConnected = (1<<0);
 const int wifiEventDisconnected = (1<<1);
 
