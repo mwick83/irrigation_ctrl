@@ -27,14 +27,20 @@ static const char* LOG_TAG_POWER_MANAGER __attribute__((unused)) = "pwr_mgr";
 class PowerManager
 {
 private:
-    const uint32_t adcVref = 1157;
+    //const uint32_t adcVref = 1157;
+    const uint32_t adcVref = 1152;
     float battVoltageMult;
     esp_adc_cal_characteristics_t battVoltageAdcCharacteristics;
 
+    SemaphoreHandle_t peripheralEnMutex;
+    StaticSemaphore_t peripheralEnMutexBuf;
     bool peripheralEnState;
+
+    SemaphoreHandle_t peripheralExtSupplyMutex;
+    StaticSemaphore_t peripheralExtSupplyMutexBuf;
     bool peripheralExtSupplyState;
 
-    const uint64_t deepSleepTimeUs = 5000000;
+    bool keepAwakeForcedState;
 
 public:
     PowerManager(void);
@@ -47,7 +53,10 @@ public:
     bool getPeripheralExtSupply(void);
 
     bool getKeepAwake(void);
-    bool gotoSleep(void);
+    void setKeepAwakeForce(bool en);
+    bool getKeepAwakeForce(void);
+
+    bool gotoSleep(uint64_t us);
 };
 
 #endif /* POWER_MANAGER_H */

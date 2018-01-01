@@ -391,7 +391,7 @@ extern "C" void app_main()
         battVoltage = pwrMgr.getSupplyVoltageMilli();
         ESP_LOGI(LOG_TAG_MAIN_CFG, "Batt voltage: %02.2f V", roundf(battVoltage * 0.1f) * 0.01f);
 
-        if(!TimeSystem_TimeIsSet() || !pwrMgr.gotoSleep()) {
+        if(!TimeSystem_TimeIsSet() || !pwrMgr.gotoSleep(5000000)) {
             vTaskDelay(pdMS_TO_TICKS(5000));
         }
     }
