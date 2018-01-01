@@ -127,6 +127,11 @@ bool PowerManager::getKeepAwakeForce(void)
     return keepAwakeForcedState;
 }
 
+bool PowerManager::getKeepAwakeIo(void)
+{
+    return (gpio_get_level(keepAwakeGpioNum) == 0) ? true : false;
+}
+
 bool PowerManager::gotoSleep(uint64_t us)
 {
     bool ret = false;

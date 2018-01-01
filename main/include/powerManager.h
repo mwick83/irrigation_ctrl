@@ -55,6 +55,7 @@ public:
     bool getKeepAwake(void);
     void setKeepAwakeForce(bool en);
     bool getKeepAwakeForce(void);
+    bool getKeepAwakeIo(void);
 
     bool gotoSleep(uint64_t us);
 };
