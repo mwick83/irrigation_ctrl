@@ -12,14 +12,13 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 
-#include "apps/sntp/sntp.h"
-
 #include "user_config.h"
 #include "mqtt.h"
 #include "serialPacketizer.h"
 #include "fillSensorProtoHandler.h"
 #include "console.h"
 #include "powerManager.h"
+#include "timeSystem.h"
 #include "wifiEvents.h"
 //#include "WebServer.h"
 
@@ -32,9 +31,6 @@
 EventGroupHandle_t wifiEvents;
 const int wifiEventConnected = (1<<0);
 const int wifiEventDisconnected = (1<<1);
-
-static EventGroupHandle_t timeEvents;
-const int timeSet = (1<<0);
 
 mqtt_client* mqttClient;
 mqtt_settings mqttSettings;
@@ -343,72 +339,6 @@ esp_err_t mqtt_prepare_settings(void)
     return ret;
 }
 
-// ********************************************************************
-// Time keeping
-// ********************************************************************
-void print_time(void) {
-    static char strftime_buf[64];
-    time_t now;
-    struct tm timeinfo;
-
-    time(&now);
-    localtime_r(&now, &timeinfo);
-    strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-    ESP_LOGI(LOG_TAG_TIME, "Current time: %s", strftime_buf);
-}
-
-void sntp_task(void* params)
-{
-    time_t now;
-    struct tm timeinfo;
-
-    ESP_LOGI(LOG_TAG_TIME, "Checking if time is already set.");
-    time(&now);
-
-    // set correct timezone
-    setenv("TZ", "CET-1CEST", 1);
-    tzset();
-    localtime_r(&now, &timeinfo);
-
-    // Is time set? If not, tm_year will be (1970 - 1900).
-    if(!(timeinfo.tm_year < (2017 - 1900))) {
-        ESP_LOGI(LOG_TAG_TIME, "-> Time already set. Setting timeEvents.");
-        xEventGroupSetBits(timeEvents, timeSet);
-        print_time();
-    } else {
-        ESP_LOGI(LOG_TAG_TIME, "-> Time not set.");
-    }
-
-    while(1) {
-        // wait being online
-        xEventGroupWaitBits(wifiEvents, wifiEventConnected, false, true, portMAX_DELAY);
-
-        ESP_LOGI(LOG_TAG_TIME, "WiFi connect detected. Initializing SNTP.");
-        sntp_setoperatingmode(SNTP_OPMODE_POLL);
-        sntp_setservername(0, (char*) "de.pool.ntp.org");
-        sntp_init();
-
-        while(timeinfo.tm_year < (2017 - 1900)) {
-            ESP_LOGI(LOG_TAG_TIME, "Waiting for system time to be set.");
-            vTaskDelay(pdMS_TO_TICKS(2000));
-            time(&now);
-            localtime_r(&now, &timeinfo);
-        }
-        ESP_LOGI(LOG_TAG_TIME, "Time set. Setting timeEvents.");
-        xEventGroupSetBits(timeEvents, timeSet);
-
-        print_time();
-
-        // wait for potential connection loss
-        xEventGroupWaitBits(wifiEvents, wifiEventDisconnected, false, true, portMAX_DELAY);
-
-        ESP_LOGI(LOG_TAG_TIME, "WiFi disconnect detected. Stopping SNTP.");
-        sntp_stop();
-    }
-
-    vTaskDelete(NULL);
-}
-
 
 // ********************************************************************
 // app_main
@@ -428,13 +358,9 @@ void ConsoleExitHook(void)
 
 extern "C" void app_main()
 {
-    TaskHandle_t sntpTaskHandle;
-
     //uint8_t fillLevelReqData[1] = {0x01};
     int fillLevel;
     float battVoltage;
-
-    timeEvents = xEventGroupCreate();
 
     ESP_ERROR_CHECK( nvs_flash_init() );
 
@@ -450,12 +376,8 @@ extern "C" void app_main()
     // Start WiFi. Events will start/stop MQTT client
     ESP_ERROR_CHECK( esp_wifi_start() );
 
-    // Start NTP task, TBD: use static task allocation xTaskCreateStatic
-    if(pdPASS == xTaskCreate(sntp_task, "sntp_task", 2048, (void*) NULL, tskIDLE_PRIORITY+1, &sntpTaskHandle)) {
-        ESP_LOGI(LOG_TAG_TIME, "SNTP task created. Starting.");
-    } else {
-        ESP_LOGE(LOG_TAG_TIME, "SNTP task creation failed!");
-    }
+    // Initialize the time system
+    TimeSystem_Init();
 
     fillSensorPacketizer = new FillSensorPacketizer();
     fillSensorProto = new FillSensorProtoHandler<FillSensorPacketizer>(fillSensorPacketizer);
@@ -469,7 +391,7 @@ extern "C" void app_main()
         battVoltage = pwrMgr.getSupplyVoltageMilli();
         ESP_LOGI(LOG_TAG_MAIN_CFG, "Batt voltage: %02.2f V", roundf(battVoltage * 0.1f) * 0.01f);
 
-        if(((xEventGroupGetBits(timeEvents) & timeSet) == 0) || !pwrMgr.gotoSleep()) {
+        if(!TimeSystem_TimeIsSet() || !pwrMgr.gotoSleep()) {
             vTaskDelay(pdMS_TO_TICKS(5000));
         }
     }
