@@ -9,12 +9,15 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "driver/gpio.h"
+
 #include "consoleCommands.h"
 #include "console.h"
 #include "consoleIo.h"
 
 #include "version.h"
-#include <driver/gpio.h>
+#include "timeSystem.h"
+
 
 #define IGNORE_UNUSED_VARIABLE(x)     if ( &x == &x ) {}
 
@@ -24,6 +27,9 @@ static eCommandResult_T ConsoleCommandVer(const char buffer[]);
 static eCommandResult_T ConsoleCommandIoDir(const char buffer[]);
 static eCommandResult_T ConsoleCommandIoSet(const char buffer[]);
 static eCommandResult_T ConsoleCommandIoGet(const char buffer[]);
+static eCommandResult_T ConsoleCommandTimeGet(const char buffer[]);
+static eCommandResult_T ConsoleCommandTimeSet(const char buffer[]);
+static eCommandResult_T ConsoleCommandTimeSntp(const char buffer[]);
 
 static const sConsoleCommandTable_T mConsoleCommandTable[] =
 {
@@ -34,6 +40,10 @@ static const sConsoleCommandTable_T mConsoleCommandTable[] =
     {"io_dir", &ConsoleCommandIoDir, HELP("Set direction of GPIO. Params: 0=ioNum, 1=ioDir")},
     {"io_set", &ConsoleCommandIoSet, HELP("Set level of GPIO. Params: 0=ioNum, 1=ioVal")},
     {"io_get", &ConsoleCommandIoGet, HELP("Get level of GPIO. Params: 0=ioNum")},
+
+    {"time_get", &ConsoleCommandTimeGet, HELP("Get the current time.")},
+    {"time_set", &ConsoleCommandTimeSet, HELP("Set the current time. Format: DD MM YYYY HH MM SS")},
+    {"time_sntp", &ConsoleCommandTimeSntp, HELP("(Re-)request time from SNTP server.")},
 
     {"exit", &ConsoleExit, HELP("Exits the command console.")},
     CONSOLE_COMMAND_TABLE_END // must be LAST
@@ -164,9 +174,62 @@ static eCommandResult_T ConsoleCommandIoGet(const char buffer[])
     return result;
 }
 
+static eCommandResult_T ConsoleCommandTimeGet(const char buffer[])
+{
+    eCommandResult_T result = COMMAND_SUCCESS;
+    static char timeStr[21];
+
+    IGNORE_UNUSED_VARIABLE(buffer);
+
+    TimeSystem_GetCurTimeStr(timeStr);
+    ConsoleIoSendString(timeStr);
+    ConsoleIoSendString(STR_ENDLINE);
+    return result;
+}
+
+static eCommandResult_T ConsoleCommandTimeSet(const char buffer[])
+{
+    eCommandResult_T result = COMMAND_SUCCESS;
+    int resultSet = -1;
+    int16_t day, month, year, hour, minute, second;
+
+    result = ConsoleReceiveParamInt16(buffer, 1, &day);
+    if(COMMAND_SUCCESS == result) result = ConsoleReceiveParamInt16(buffer, 2, &month);
+    if(COMMAND_SUCCESS == result) result = ConsoleReceiveParamInt16(buffer, 3, &year);
+    if(COMMAND_SUCCESS == result) result = ConsoleReceiveParamInt16(buffer, 4, &hour);
+    if(COMMAND_SUCCESS == result) result = ConsoleReceiveParamInt16(buffer, 5, &minute);
+    if(COMMAND_SUCCESS == result) result = ConsoleReceiveParamInt16(buffer, 6, &second);
+
+    if(COMMAND_SUCCESS == result) resultSet = TimeSystem_SetTime(day, month, year, hour, minute, second);
+
+    if((COMMAND_SUCCESS == result) && (0 == resultSet)) {
+        ConsoleIoSendString("New time set.");
+    } else {
+        if(COMMAND_SUCCESS != result) {
+            ConsoleIoSendString("Error parsing time.");
+        } else {
+            ConsoleIoSendString("Error in specified time.");
+            result = COMMAND_ERROR;
+        }
+    }
+    ConsoleIoSendString(STR_ENDLINE);
+
+    return result;
+}
+
+static eCommandResult_T ConsoleCommandTimeSntp(const char buffer[])
+{
+    eCommandResult_T result = COMMAND_SUCCESS;
+
+    TimeSystem_SntpRequest();
+
+    ConsoleIoSendString("Get time via SNTP requested.");
+    ConsoleIoSendString(STR_ENDLINE);
+
+    return result;
+}
+
 const sConsoleCommandTable_T* ConsoleCommandsGetTable(void)
 {
     return (mConsoleCommandTable);
 }
-
-
