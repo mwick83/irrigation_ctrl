@@ -7,3 +7,6 @@
 [submodule "components/console-esp32"]
 	path = components/console-esp32
 	url = https://github.com/mwick83/console-esp32
+[submodule "components/mqtt-manager-esp32"]
+	path = components/mqtt-manager-esp32
+	url = https://github.com/mwick83/mqtt-manager-esp32.git
