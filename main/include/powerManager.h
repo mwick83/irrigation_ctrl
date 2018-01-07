@@ -41,6 +41,7 @@ private:
     bool peripheralExtSupplyState;
 
     bool keepAwakeForcedState;
+    bool keepAwakeAtBootState;
 
 public:
     PowerManager(void);
@@ -56,6 +57,7 @@ public:
     void setKeepAwakeForce(bool en);
     bool getKeepAwakeForce(void);
     bool getKeepAwakeIo(void);
+    bool getKeepAwakeAtBoot(void);
 
     bool gotoSleep(uint64_t us);
 };

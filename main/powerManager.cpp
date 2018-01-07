@@ -40,6 +40,9 @@ PowerManager::PowerManager(void)
     gpio_set_pull_mode(keepAwakeGpioNum, GPIO_FLOATING); // board has an external pull
 
     keepAwakeForcedState = false;
+
+    // TBD: wait for settlement of IO?
+    keepAwakeAtBootState = gpio_get_level(keepAwakeGpioNum);
 }
 
 float PowerManager::getSupplyVoltageMilli(void)
@@ -132,7 +135,11 @@ bool PowerManager::getKeepAwakeIo(void)
     return (gpio_get_level(keepAwakeGpioNum) == 0) ? true : false;
 }
 
-bool PowerManager::gotoSleep(uint64_t us)
+bool PowerManager::getKeepAwakeAtBoot(void)
+{
+    return keepAwakeAtBootState;
+}
+
 {
     bool ret = false;
     esp_err_t err;
