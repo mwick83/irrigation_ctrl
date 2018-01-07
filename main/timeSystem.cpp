@@ -124,6 +124,23 @@ bool TimeSystem_TimeIsSet(void)
     return (0 != (xEventGroupGetBits(timeEvents) & timeEventTimeSet));
 }
 
+bool TimeSystem_WaitTimeSet(int waitMillis)
+{
+    TickType_t wait = portMAX_DELAY;
+    EventBits_t events;
+
+    if(waitMillis >= 0) {
+        wait = pdMS_TO_TICKS(waitMillis);
+    }
+
+    events = xEventGroupWaitBits(timeEvents, timeEventTimeSet, 0, pdTRUE, wait);
+    if(0 != (events & timeEventTimeSet)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 void TimeSystem_LogTime(void)
 {
     static char strftime_buf[64];
