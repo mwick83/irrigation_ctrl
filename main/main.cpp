@@ -14,13 +14,10 @@
 
 #include "user_config.h"
 #include "mqtt.h"
-#include "serialPacketizer.h"
-#include "fillSensorProtoHandler.h"
 #include "console.h"
-#include "powerManager.h"
-#include "timeSystem.h"
 #include "wifiEvents.h"
-//#include "WebServer.h"
+#include "globalComponents.h"
+#include "irrigationController.h"
 
 
 // ********************************************************************
@@ -32,18 +29,22 @@ EventGroupHandle_t wifiEvents;
 const int wifiEventConnected = (1<<0);
 const int wifiEventDisconnected = (1<<1);
 
+// MQTT client and settings
 mqtt_client* mqttClient;
 mqtt_settings mqttSettings;
 
 // MAC address
 static uint8_t mac_addr[6];
 
-// fill level sensor
-FillSensorPacketizer* fillSensorPacketizer;
-FillSensorProtoHandler<FillSensorPacketizer>* fillSensorProto;
+// external fill level sensor
+FillSensorPacketizer fillSensorPacketizer;
+FillSensorProtoHandler<FillSensorPacketizer> fillSensor(&fillSensorPacketizer);
 
 // power manager
 PowerManager pwrMgr;
+
+// the actual controller
+IrrigationController irrigCtrl;
 
 // ********************************************************************
 // WiFi handling
@@ -358,10 +359,7 @@ void ConsoleExitHook(void)
 
 extern "C" void app_main()
 {
-    //uint8_t fillLevelReqData[1] = {0x01};
-    int fillLevel;
-    float battVoltage;
-
+    // Begin with system init now
     ESP_ERROR_CHECK( nvs_flash_init() );
 
     // Initialize WiFi, but don't start yet.
@@ -379,20 +377,7 @@ extern "C" void app_main()
     // Initialize the time system
     TimeSystem_Init();
 
-    fillSensorPacketizer = new FillSensorPacketizer();
-    fillSensorProto = new FillSensorProtoHandler<FillSensorPacketizer>(fillSensorPacketizer);
-
     ConsoleInit(true, ConsoleStartHook, ConsoleExitHook);
 
-    while(1) {
-        //fillLevel = fillSensorProto->getFillLevel();
-        //ESP_LOGI(LOG_TAG_MAIN_CFG, "Fill level: %d", fillLevel);
-
-        battVoltage = pwrMgr.getSupplyVoltageMilli();
-        ESP_LOGI(LOG_TAG_MAIN_CFG, "Batt voltage: %02.2f V", roundf(battVoltage * 0.1f) * 0.01f);
-
-        if(!TimeSystem_TimeIsSet() || !pwrMgr.gotoSleep(5000000)) {
-            vTaskDelay(pdMS_TO_TICKS(5000));
-        }
-    }
+    irrigCtrl.start();
 }
