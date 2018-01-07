@@ -14,7 +14,6 @@
 
 #include "user_config.h"
 
-static const char* LOG_TAG = "ser_pkt"; // TBD: add port number
 
 template <uart_port_t portNum, uint32_t baud, int rxPin, int txPin, unsigned int maxPayloadLen=16, unsigned int numRxBuffers=2>
 class SerialPacketizer
@@ -26,6 +25,8 @@ public:
     } BUFFER_T;
 
 private:
+    char logTag[14]; // "ser_pkt_uartX"
+
     typedef enum {
         RX_FSM_STATE_IDLE = 0,
         RX_FSM_STATE_HEADER = 1,
@@ -78,7 +79,7 @@ private:
         static uart_event_t uart_event;
         static BUFFER_T tmpBuffer;
 
-        ESP_LOGD(LOG_TAG, "Handling task started. Caller: 0x%08x", (uint32_t) params);
+        ESP_LOGD(caller->logTag, "Handling task started. Caller: 0x%08x", (uint32_t) params);
 
         while(1) {
             // TBD: add stop request signal
@@ -88,22 +89,22 @@ private:
                 if(uart_event.type == UART_DATA) {
                     stat = caller->handleRxData();
                     if(stat < 0) {
-                        ESP_LOGW(LOG_TAG, "handleRxData returned error code %d", stat);
+                        ESP_LOGW(caller->logTag, "handleRxData returned error code %d", stat);
                     } else {
                         if(errQUEUE_FULL == xQueueSendToBack(caller->rxPacketQueue, &(caller->rxBuffer), queueWaitTime)) {
-                            ESP_LOGW(LOG_TAG, "Received packet couldn't be queued within timeout. Dropping it.")
+                            ESP_LOGW(caller->logTag, "Received packet couldn't be queued within timeout. Dropping it.")
                         }
                         memset(caller->rxBuffer.data, 0x00, maxPayloadLen);
                         caller->rxBuffer.len = -1;
                     }
                 } else {
-                    ESP_LOGW(LOG_TAG, "Unhandled UART event reveived: type = %d", (uint32_t) uart_event.type);
+                    ESP_LOGW(caller->logTag, "Unhandled UART event reveived: type = %d", (uint32_t) uart_event.type);
                 }
             } else if(activeQueue == caller->txPacketQueue) {
                 xQueueReceive(activeQueue, &tmpBuffer, portMAX_DELAY); // no blocking, because select ensures it is available
                 stat = caller->handleTxData(tmpBuffer.len, tmpBuffer.data);
                 if(0 != stat) {
-                    ESP_LOGW(LOG_TAG, "handleTxData returned error code %d", stat);
+                    ESP_LOGW(caller->logTag, "handleTxData returned error code %d", stat);
                 }
             } else {
                 // TBD: implement exit of processing loop
@@ -129,7 +130,7 @@ private:
         while(charsAvail) {
             readStat = uart_read_bytes(portNum, &curChar, 1, 1);
             if(1 != readStat) {
-                ESP_LOGW(LOG_TAG, "Reading UART byte failed with status %d.", readStat);
+                ESP_LOGW(logTag, "Reading UART byte failed with status %d.", readStat);
             } else {
                 charsAvail--;
 
@@ -149,7 +150,7 @@ private:
                             } else {
                                 cnt = 0;
                                 state = RX_FSM_STATE_IDLE;
-                                ESP_LOGW(LOG_TAG, "Invalid preamble byte received.");
+                                ESP_LOGW(logTag, "Invalid preamble byte received.");
                                 // TBD: return distinctive error code
                             }
                         } else {
@@ -163,10 +164,10 @@ private:
                             } else {
                                 rxEn = false;
                                 if(curChar > maxPayloadLen) {
-                                    ESP_LOGW(LOG_TAG, "Receiving packet length (%d) is too big. Packet will be dropped.", curChar);
+                                    ESP_LOGW(logTag, "Receiving packet length (%d) is too big. Packet will be dropped.", curChar);
                                     // TBD: return distinctive error code
                                 } else {
-                                    ESP_LOGE(LOG_TAG, "Receive buffer is not free. This can't happen!");
+                                    ESP_LOGE(logTag, "Receive buffer is not free. This can't happen!");
                                     // TBD: return distinctive error code
                                 }
                             }
@@ -208,7 +209,7 @@ private:
                             if(rxEn) {
                                 rxBuffer.len = -1;
                             }
-                            ESP_LOGW(LOG_TAG, "Invalid postamble byte received.");
+                            ESP_LOGW(logTag, "Invalid postamble byte received.");
                             // TBD: return distinctive error code
                         }
                         break;
@@ -216,7 +217,7 @@ private:
                     default:
                         state = RX_FSM_STATE_IDLE;
                         cnt = 0;
-                        ESP_LOGE(LOG_TAG, "RX_FSM in invalid state!");
+                        ESP_LOGE(logTag, "RX_FSM in invalid state!");
                         // TBD: return distinctive error code
                         break;
                 }
@@ -260,6 +261,8 @@ private:
 public:
     SerialPacketizer(void)
     {
+        snprintf(logTag, sizeof(logTag) / sizeof(logTag[0]), "ser_pkt_uart%d", portNum);
+
         const int uartRxBufferSize = (maxPayloadLen*4 < UART_FIFO_LEN*2) ? UART_FIFO_LEN*2 : maxPayloadLen*4;
         const int uartTxBufferSize = (maxPayloadLen*4 < UART_FIFO_LEN*2) ? UART_FIFO_LEN*2 : maxPayloadLen*4;
 
@@ -283,10 +286,10 @@ public:
 
         procQueueSet = xQueueCreateSet(numRxBuffers+numTxBuffers);
         if(pdPASS != xQueueAddToSet(rxDriverQueue, procQueueSet)) {
-            ESP_LOGE(LOG_TAG, "rxDriverQueue couldn't be added to processing queue set!")
+            ESP_LOGE(logTag, "rxDriverQueue couldn't be added to processing queue set!")
         }
         if(pdPASS != xQueueAddToSet(txPacketQueue, procQueueSet)) {
-            ESP_LOGE(LOG_TAG, "txPacketQueue couldn't be added to processing queue set!")
+            ESP_LOGE(logTag, "txPacketQueue couldn't be added to processing queue set!")
         }
 
         //taskHandle = xTaskCreateStatic(this->taskFunc, "serial_packetizer_task", taskStackSize, NULL, taskPrio, taskStack, taskBuf);
@@ -309,10 +312,10 @@ public:
 
         stat = xQueueSendToBack(txPacketQueue, &tmpBuffer, wait);
         if(errQUEUE_FULL == stat) {
-            ESP_LOGW(LOG_TAG, "Transmit packet couldn't be queued within timeout. Dropping it.");
+            ESP_LOGW(logTag, "Transmit packet couldn't be queued within timeout. Dropping it.");
             return -1;
         } else {
-            ESP_LOGD(LOG_TAG, "Transmit packet queued.");
+            ESP_LOGD(logTag, "Transmit packet queued.");
             return 0;
         }
     }

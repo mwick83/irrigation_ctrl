@@ -1,6 +1,5 @@
 #include "powerManager.h"
 
-
 PowerManager::PowerManager(void)
 {
     // setup ADC for battery voltage conversion
@@ -64,10 +63,10 @@ float PowerManager::getSupplyVoltageMilli(void)
 
     if(adcRaw > -1) {
         millis = millis>>3;
-        ESP_LOGD(LOG_TAG_POWER_MANAGER, "batt voltage filtered, calibrated from ADC: %04d mV", millis);
+        ESP_LOGD(logTag, "batt voltage filtered, calibrated from ADC: %04d mV", millis);
         result = millis * battVoltageMult;
     } else {
-        ESP_LOGE(LOG_TAG_POWER_MANAGER, "Error occurred during ADC conversion (batt voltage).");
+        ESP_LOGE(logTag, "Error occurred during ADC conversion (batt voltage).");
     }
 
     return result;
@@ -80,10 +79,10 @@ void PowerManager::setPeripheralEnable(bool en)
         peripheralEnState = en;
 
         if(pdFALSE == xSemaphoreGive(peripheralEnMutex)) {
-            ESP_LOGE(LOG_TAG_POWER_MANAGER, "Error occurred releasing the peripheralEnMutex.");
+            ESP_LOGE(logTag, "Error occurred releasing the peripheralEnMutex.");
         }
     } else {
-        ESP_LOGE(LOG_TAG_POWER_MANAGER, "Error occurred acquiring the peripheralEnMutex.");
+        ESP_LOGE(logTag, "Error occurred acquiring the peripheralEnMutex.");
     }
 }
 
@@ -95,7 +94,7 @@ bool PowerManager::getPeripheralEnable(void)
 void PowerManager::setPeripheralExtSupply(bool en)
 {
     if((peripheralEnState == false) && (en == true)) {
-        ESP_LOGW(LOG_TAG_POWER_MANAGER, "Global peripheral enable is not set, but external peripheral supply enable is requested.");
+        ESP_LOGW(logTag, "Global peripheral enable is not set, but external peripheral supply enable is requested.");
     }
 
     if(pdTRUE == xSemaphoreTake(peripheralExtSupplyMutex, portMAX_DELAY)) {
@@ -103,10 +102,10 @@ void PowerManager::setPeripheralExtSupply(bool en)
         peripheralExtSupplyState = en;
 
         if(pdFALSE == xSemaphoreGive(peripheralExtSupplyMutex)) {
-            ESP_LOGE(LOG_TAG_POWER_MANAGER, "Error occurred releasing the peripheralExtSupplyMutex.");
+            ESP_LOGE(logTag, "Error occurred releasing the peripheralExtSupplyMutex.");
         }
     } else {
-        ESP_LOGE(LOG_TAG_POWER_MANAGER, "Error occurred acquiring the peripheralExtSupplyMutex.");
+        ESP_LOGE(logTag, "Error occurred acquiring the peripheralExtSupplyMutex.");
     }
 }
 
@@ -145,19 +144,19 @@ bool PowerManager::getKeepAwakeAtBoot(void)
     esp_err_t err;
 
     if(keepAwakeForcedState || getKeepAwake()) {
-        ESP_LOGI(LOG_TAG_POWER_MANAGER, "gotoSleep requested, but keep awake is set. Not going to sleep.");
+        ESP_LOGI(logTag, "gotoSleep requested, but keep awake is set. Not going to sleep.");
     } else {
         // prepare for sleep
         esp_wifi_stop(); // ignore return value, because we don't care if WiFi was up before
 
         err = esp_sleep_enable_timer_wakeup(us);
-        if(ESP_OK != err) ESP_LOGE(LOG_TAG_POWER_MANAGER, "Error setting up deep sleep timer.");
+        if(ESP_OK != err) ESP_LOGE(logTag, "Error setting up deep sleep timer.");
 
         if(ESP_OK == err) {
             for(int domCnt=0; domCnt < ESP_PD_DOMAIN_MAX; domCnt++) {
                 err = esp_sleep_pd_config((esp_sleep_pd_domain_t) domCnt, ESP_PD_OPTION_AUTO);
                 if(ESP_OK != err) {
-                    ESP_LOGE(LOG_TAG_POWER_MANAGER, "Error setting power domain %d to AUTO.", domCnt);
+                    ESP_LOGE(logTag, "Error setting power domain %d to AUTO.", domCnt);
                     break;
                 }
             }

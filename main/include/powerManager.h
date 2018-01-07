@@ -20,13 +20,11 @@
 #include "user_config.h"
 
 
-// TBD: how to encapsulate this correctly?
-static const char* LOG_TAG_POWER_MANAGER __attribute__((unused)) = "pwr_mgr";
-
-
 class PowerManager
 {
 private:
+    const char* logTag = "pwr_mgr";
+
     //const uint32_t adcVref = 1157;
     const uint32_t adcVref = 1152;
     float battVoltageMult;

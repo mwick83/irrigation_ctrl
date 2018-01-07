@@ -17,15 +17,14 @@
 //#include "serialPacketizer.h"
 
 
-// TBD: how to encapsulate this correctly?
-static const char* LOG_TAG_FILL_PROTO = "fill_proto";
-
 template <class PacketizerClass>
 class FillSensorProtoHandler
 {
 private:
+    const char* logTag = "fill_proto";
+
     static const unsigned int maxPacketDataLen = 4;
-    
+
     PacketizerClass* packetizer;
     class PacketizerClass::BUFFER_T rxPacketBuf;
     QueueHandle_t rxPacketQueue;
