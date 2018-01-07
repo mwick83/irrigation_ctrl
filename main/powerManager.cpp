@@ -139,9 +139,11 @@ bool PowerManager::getKeepAwakeAtBoot(void)
     return keepAwakeAtBootState;
 }
 
+bool PowerManager::gotoSleep(uint32_t ms)
 {
     bool ret = false;
     esp_err_t err;
+    uint64_t sleepUs = ms * 1000;
 
     if(keepAwakeForcedState || getKeepAwake()) {
         ESP_LOGI(logTag, "gotoSleep requested, but keep awake is set. Not going to sleep.");
@@ -149,7 +151,7 @@ bool PowerManager::getKeepAwakeAtBoot(void)
         // prepare for sleep
         esp_wifi_stop(); // ignore return value, because we don't care if WiFi was up before
 
-        err = esp_sleep_enable_timer_wakeup(us);
+        err = esp_sleep_enable_timer_wakeup(sleepUs);
         if(ESP_OK != err) ESP_LOGE(logTag, "Error setting up deep sleep timer.");
 
         if(ESP_OK == err) {

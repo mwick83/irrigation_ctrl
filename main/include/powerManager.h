@@ -57,7 +57,7 @@ public:
     bool getKeepAwakeIo(void);
     bool getKeepAwakeAtBoot(void);
 
-    bool gotoSleep(uint64_t us);
+    bool gotoSleep(uint32_t ms);
 };
 
 #endif /* POWER_MANAGER_H */
