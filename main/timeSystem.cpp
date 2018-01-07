@@ -23,7 +23,11 @@ static const char* LOG_TAG_TIME = "time";
 static EventGroupHandle_t timeEvents;
 const int timeEventTimeSet = (1<<0);
 
-TaskHandle_t sntpTaskHandle;
+static const int sntpTaskStackSize = 2048;
+static const UBaseType_t sntpTaskPrio = tskIDLE_PRIORITY + 1; // TBD
+static StackType_t sntpTaskStack[sntpTaskStackSize];
+static StaticTask_t sntpTaskBuf;
+static TaskHandle_t sntpTaskHandle;
 void sntp_task(void* params);
 
 
@@ -54,7 +58,8 @@ extern "C" void TimeSystem_Init(void)
         ESP_LOGI(LOG_TAG_TIME, "-> Time not set.");
     }
 
-    if(pdPASS == xTaskCreate(sntp_task, "sntp_task", 2048, (void*) NULL, tskIDLE_PRIORITY+1, &sntpTaskHandle)) {
+    sntpTaskHandle = xTaskCreateStatic(sntp_task, "sntp_task", sntpTaskStackSize, nullptr, sntpTaskPrio, sntpTaskStack, &sntpTaskBuf);
+    if(NULL != sntpTaskHandle) {
         ESP_LOGI(LOG_TAG_TIME, "SNTP task created. Starting.");
     } else {
         ESP_LOGE(LOG_TAG_TIME, "SNTP task creation failed!");
