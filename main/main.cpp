@@ -29,10 +29,6 @@ EventGroupHandle_t wifiEvents;
 const int wifiEventConnected = (1<<0);
 const int wifiEventDisconnected = (1<<1);
 
-// MQTT client and settings
-mqtt_client* mqttClient;
-mqtt_settings mqttSettings;
-
 // MAC address
 static uint8_t mac_addr[6];
 
@@ -42,6 +38,13 @@ FillSensorProtoHandler<FillSensorPacketizer> fillSensor(&fillSensorPacketizer);
 
 // power manager
 PowerManager pwrMgr;
+
+// MQTT client and settings
+mqtt_client* mqttClient;
+mqtt_settings mqttSettings;
+
+// MQTT client manager
+MqttManager mqttMgr;
 
 // the actual controller
 IrrigationController irrigCtrl;
@@ -249,7 +252,7 @@ void mqtt_data_cb(mqtt_client* client, mqtt_event_data_t* event_data)
         }
         #endif
     } else {
-        ESP_LOGW(LOG_TAG_MQTT_CB, "Couldn't allocate memory for topic/data buffer. Ignoring data.");
+        ESP_LOGE(LOG_TAG_MQTT_CB, "Couldn't allocate memory for topic/data buffer. Ignoring data.");
     }
 
     if(NULL != topicBuf) free(topicBuf);
@@ -288,7 +291,7 @@ void mqtt_dimmer_state_update_cb(uint32_t ch, DIMMER_DATA_T state)
 
         mqtt_publish(&mqttClient, state_update_topic, state_update_data, strlen(state_update_data), 2, 1);
     } else {
-        ESP_LOGI(LOG_TAG_MQTT_CB, "State update topic got too long! Code config error?");
+        ESP_LOGE(LOG_TAG_MQTT_CB, "State update topic got too long! Code config error?");
     }
 }
 #endif

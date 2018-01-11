@@ -10,11 +10,14 @@
 #include "timeSystem.h"
 #include "powerManager.h"
 #include "irrigationController.h"
+#include "mqttManager.h"
 
 extern FillSensorPacketizer fillSensorPacketizer;
 extern FillSensorProtoHandler<FillSensorPacketizer> fillSensor;
 
 extern PowerManager pwrMgr;
+
+extern MqttManager mqttMgr;
 
 #endif
 
