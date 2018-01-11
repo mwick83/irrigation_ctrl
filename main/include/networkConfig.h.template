@@ -1,0 +1,24 @@
+#ifndef NETWORK_CONFIG_H
+#define NETWORK_CONFIG_H
+
+// WiFi config
+#define STA_SSID                "MYWLAN"
+#define STA_PASS                "MYWLANPASSWORD"
+
+// MQTT config
+#define MQTT_HOST               "mqttbroker.localdomain"
+#define MQTT_PORT               1883
+#define MQTT_SECURITY           0
+#define MQTT_BUF_SIZE           1024
+#define MQTT_KEEPALIVE          120
+#define MQTT_RECONNECT_TIMEOUT  5
+
+//#define MQTT_PROTOCOL_NAMEv31 /*MQTT version 3.1 compatible with Mosquitto v0.15*/
+#define MQTT_PROTOCOL_NAMEv311  /*MQTT version 3.11 compatible with https://eclipse.org/paho/clients/testing/*/
+
+#define MQTT_CLIENT_ID          "irrigation_ctrl_"
+#define MQTT_USER               "MQTTUSER"
+#define MQTT_PASS               "MQTTPASSWORD"
+
+
+#endif /* NETWORK_CONFIG_H */
