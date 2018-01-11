@@ -10,3 +10,5 @@ build/
 .tags1
 .vscode/
 unused_code/
+main/include/networkConfig.h
+settings.txt
