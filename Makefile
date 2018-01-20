@@ -13,3 +13,7 @@ CFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
 CXXFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
 
 include $(IDF_PATH)/make/project.mk
+
+.PHONY: doc
+doc:
+	doxygen doc/Doxyfile

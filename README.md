@@ -1,4 +1,4 @@
-# Irrigation Controller (software repo)
+# Irrigation Controller
 
 This is the software repository for the Irrigation Controller project.
 

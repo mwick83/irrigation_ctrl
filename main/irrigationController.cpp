@@ -1,9 +1,16 @@
 #include "irrigationController.h"
 
+/**
+ * @brief Default constructor, which performs basic initialization,
+ * but doesn't start processing.
+ */
 IrrigationController::IrrigationController(void)
 {
 }
 
+/**
+ * @brief Start the IrrigationController processing task.
+ */
 void IrrigationController::start(void)
 {
     taskHandle = xTaskCreateStatic(taskFunc, "irrig_ctrl_task", taskStackSize, (void*) this, taskPrio, taskStack, &taskBuf);
@@ -14,6 +21,21 @@ void IrrigationController::start(void)
     }
 }
 
+/**
+ * @brief This is the IrrigationController processing task.
+ * 
+ * It performs data collection, power managmenet of the sensors and the actual
+ * decision wether or not to water the plants. It also updates the status information
+ * with the gathered data.
+ * 
+ * Depending on the operation mode (i.e. keep awake jumper is set or otherwise 
+ * enforced by software), it will loop within the task and periodically check for 
+ * the next watering and perform status updates or it will bring the processor to 
+ * deep sleep.
+ * 
+ * @param params Task parameters. Used to pass in the actual IrrigationController
+ * instance the task function is running for.
+ */
 void IrrigationController::taskFunc(void* params)
 {
     IrrigationController const* caller = (IrrigationController*) params;

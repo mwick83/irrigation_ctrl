@@ -12,3 +12,4 @@ build/
 unused_code/
 main/include/networkConfig.h
 settings.txt
+doc/html/
