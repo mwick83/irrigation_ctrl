@@ -44,6 +44,8 @@ PowerManager::PowerManager(void)
     keepAwakeAtBootState = gpio_get_level(keepAwakeGpioNum);
 }
 
+// TBD: implement destructor for resource cleanup
+
 float PowerManager::getSupplyVoltageMilli(void)
 {
     int adcRaw;
