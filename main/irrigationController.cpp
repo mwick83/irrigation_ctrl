@@ -102,7 +102,9 @@ void IrrigationController::taskFunc(void* params)
         // Irrigation
         // *********************
         // Get irrigation plan
+
         // Update state
+        caller->publishStateUpdate();
 
         // Perform the irrigation
 
@@ -133,4 +135,16 @@ void IrrigationController::taskFunc(void* params)
 
     ESP_LOGE(caller->logTag, "Task unexpectetly exited! Performing reboot.");
     //pwrMgr->reboot();
+}
+
+/**
+ * @brief Publish currently stored state via MQTT.
+ */
+void IrrigationController::publishStateUpdate(void)
+{
+    if(false == mqttMgr.waitConnected(mqttConnectedWaitMillis)) {
+        ESP_LOGW(logTag, "MQTT manager has no connection after timeout.")
+    } else {
+        mqttMgr.publish("whan/irrig_ctrl/AABBCCDDEEFF/state", "yeah", 5, MqttManager::QOS_EXACTLY_ONCE, false);
+    }
 }

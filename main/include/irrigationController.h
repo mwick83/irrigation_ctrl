@@ -42,11 +42,13 @@ private:
 
     int timeSetWaitMillis = 10000; // TBD: from config
     int wifiConnectedWaitMillis = 10000; // TBD: from config
+    int mqttConnectedWaitMillis = 2000; // TBD: from config
 
     uint32_t wakeupIntervalMillis = 10000;
     uint64_t wakeupIntervalKeepAwakeMillis = 5000;
 
     static void taskFunc(void* params);
+    void publishStateUpdate(void);
 
 public:
     IrrigationController(void);

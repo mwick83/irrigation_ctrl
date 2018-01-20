@@ -95,6 +95,7 @@ static void initialiseWifi(void)
     ESP_ERROR_CHECK( esp_wifi_set_config(ESP_IF_WIFI_STA, &wifiConfig) );
 }
 
+#if 0
 // ********************************************************************
 // MQTT callbacks + setup
 // ********************************************************************
@@ -115,7 +116,6 @@ static void initialiseWifi(void)
 #define MQTT_DIMMERS_STATE_DATA_LEN_MAX      	38
 #define MQTT_DIMMERS_STATE_TOPIC_LEN_MAX		(MQTT_DIMMERS_TOPIC_PRE_LEN + 2 + MQTT_DIMMERS_TOPIC_POST_STATE_LEN + 12 + 1)
 
-#if 0
 static char state_update_topic[MQTT_DIMMERS_STATE_TOPIC_LEN_MAX];
 static char state_update_data[MQTT_DIMMERS_STATE_DATA_LEN_MAX];
 
