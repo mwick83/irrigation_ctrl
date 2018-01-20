@@ -39,10 +39,6 @@ FillSensorProtoHandler<FillSensorPacketizer> fillSensor(&fillSensorPacketizer);
 // power manager
 PowerManager pwrMgr;
 
-// MQTT client and settings
-mqtt_client* mqttClient;
-mqtt_settings mqttSettings;
-
 // MQTT client manager
 MqttManager mqttMgr;
 
@@ -61,7 +57,7 @@ static esp_err_t wifiEventHandler(void *ctx, system_event_t *event)
         case SYSTEM_EVENT_STA_GOT_IP:
             xEventGroupSetBits(wifiEvents, wifiEventConnected);
             xEventGroupClearBits(wifiEvents, wifiEventDisconnected);
-            mqttClient = mqtt_start(&mqttSettings); // TBD: to main loop
+            mqttMgr.start();
             break;
         case SYSTEM_EVENT_STA_DISCONNECTED:
             /* This is a workaround as ESP32 WiFi libs don't currently
@@ -69,7 +65,7 @@ static esp_err_t wifiEventHandler(void *ctx, system_event_t *event)
             esp_wifi_connect();
             xEventGroupClearBits(wifiEvents, wifiEventConnected);
             xEventGroupSetBits(wifiEvents, wifiEventDisconnected);
-            mqtt_stop(); // TBD: to main loop
+            mqttMgr.stop();
             break;
         default:
             break;
@@ -119,6 +115,7 @@ static void initialiseWifi(void)
 #define MQTT_DIMMERS_STATE_DATA_LEN_MAX      	38
 #define MQTT_DIMMERS_STATE_TOPIC_LEN_MAX		(MQTT_DIMMERS_TOPIC_PRE_LEN + 2 + MQTT_DIMMERS_TOPIC_POST_STATE_LEN + 12 + 1)
 
+#if 0
 static char state_update_topic[MQTT_DIMMERS_STATE_TOPIC_LEN_MAX];
 static char state_update_data[MQTT_DIMMERS_STATE_DATA_LEN_MAX];
 
@@ -129,7 +126,6 @@ void mqtt_connected_cb(mqtt_client* client, mqtt_event_data_t* event_data)
 
     ESP_LOGI(LOG_TAG_MQTT_CB, "Connected.");
 
-    #if 0
     // prepare subscription topic
     topic = (char*) malloc(MQTT_DIMMERS_TOPIC_PRE_LEN + MQTT_DIMMERS_TOPIC_CH_WILDCARD_LEN + MQTT_DIMMERS_TOPIC_POST_SET_LEN + 12 + 1);
     memcpy(topic, MQTT_DIMMERS_TOPIC_PRE, MQTT_DIMMERS_TOPIC_PRE_LEN);
@@ -156,7 +152,6 @@ void mqtt_connected_cb(mqtt_client* client, mqtt_event_data_t* event_data)
     mqtt_subscribe(client, topic, 2);
 
     free(topic);
-    #endif
 }
 
 void mqtt_disconnected_cb(mqtt_client* client, mqtt_event_data_t* event_data)
@@ -187,7 +182,6 @@ void mqtt_data_cb(mqtt_client* client, mqtt_event_data_t* event_data)
 
         ESP_LOGD(LOG_TAG_MQTT_CB, "topic: %s, data: %s", topicBuf, dataBuf);
 
-        #if 0
         // check prefix of topic, but expect the MAC address to match
         if(strncmp(topicBuf, MQTT_DIMMERS_TOPIC_PRE, MQTT_DIMMERS_TOPIC_PRE_LEN) == 0) {
             // check length (pre+set + at least two more chars (xxx/0/set) and set command at the end
@@ -250,7 +244,6 @@ void mqtt_data_cb(mqtt_client* client, mqtt_event_data_t* event_data)
                 ESP_LOGI(LOG_TAG_MQTT_CB, "Another OTA update is still in progress!");
             }
         }
-        #endif
     } else {
         ESP_LOGE(LOG_TAG_MQTT_CB, "Couldn't allocate memory for topic/data buffer. Ignoring data.");
     }
@@ -259,7 +252,6 @@ void mqtt_data_cb(mqtt_client* client, mqtt_event_data_t* event_data)
     if(NULL != dataBuf) free(dataBuf);
 }
 
-#if 0
 void mqtt_dimmer_state_update_cb_init(void)
 {
     int i;
@@ -296,7 +288,7 @@ void mqtt_dimmer_state_update_cb(uint32_t ch, DIMMER_DATA_T state)
 }
 #endif
 
-esp_err_t mqtt_prepare_settings(void)
+esp_err_t initialiseMqttMgr(void)
 {
     int ret = ESP_OK;
 
@@ -307,10 +299,7 @@ esp_err_t mqtt_prepare_settings(void)
     mqtt_client_id_len = strlen(MQTT_CLIENT_ID) + 12;
     clientName = (char*) malloc(mqtt_client_id_len+1);
 
-    if(NULL == clientName) ret = ESP_ERR_NO_MEM;
-    if(strlen(MQTT_HOST) > CONFIG_MQTT_MAX_HOST_LEN) ret = ESP_ERR_INVALID_ARG;
-    if(strlen(MQTT_USER) > CONFIG_MQTT_MAX_USERNAME_LEN) ret = ESP_ERR_INVALID_ARG;
-    if(strlen(MQTT_PASS) > CONFIG_MQTT_MAX_PASSWORD_LEN) ret = ESP_ERR_INVALID_ARG;
+    if(nullptr == clientName) ret = ESP_ERR_NO_MEM;
     if(mqtt_client_id_len > CONFIG_MQTT_MAX_CLIENT_LEN) ret = ESP_ERR_INVALID_ARG;
 
     if(ESP_OK == ret) {
@@ -321,24 +310,10 @@ esp_err_t mqtt_prepare_settings(void)
         }
         clientName[mqtt_client_id_len] = 0;
 
-        // prepare MQTT settings
-        strncpy(mqttSettings.host, MQTT_HOST, CONFIG_MQTT_MAX_HOST_LEN);
-        mqttSettings.port = MQTT_PORT;
-        strncpy(mqttSettings.username, MQTT_USER, CONFIG_MQTT_MAX_USERNAME_LEN);
-        strncpy(mqttSettings.password, MQTT_PASS, CONFIG_MQTT_MAX_PASSWORD_LEN);
-        mqttSettings.clean_session = 0;
-        mqttSettings.keepalive = MQTT_KEEPALIVE;
-        strncpy(mqttSettings.client_id, clientName, CONFIG_MQTT_MAX_CLIENT_LEN);
-        mqttSettings.auto_reconnect = true;
-        mqttSettings.lwt_topic[0] = 0;
-        mqttSettings.connected_cb = mqtt_connected_cb;
-        mqttSettings.disconnected_cb = mqtt_disconnected_cb;
-        mqttSettings.subscribe_cb = NULL;
-        mqttSettings.publish_cb = mqtt_published_cb;
-        mqttSettings.data_cb = mqtt_data_cb;
+        mqttMgr.init(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS, clientName);
     }
 
-    if(NULL != clientName) free(clientName);
+    if(nullptr != clientName) free(clientName);
 
     return ret;
 }
@@ -362,7 +337,7 @@ void ConsoleExitHook(void)
 
 extern "C" void app_main()
 {
-    // Begin with system init now
+    // Begin with system init now.
     ESP_ERROR_CHECK( nvs_flash_init() );
 
     // Initialize WiFi, but don't start yet.
@@ -371,8 +346,9 @@ extern "C" void app_main()
     // Store MAC addr globally to use in mqtt callbacks
     ESP_ERROR_CHECK( esp_wifi_get_mac(ESP_IF_WIFI_STA, mac_addr) );
 
-    // Prepare global mqtt settings (needed due to lack of named initializers in C99).
-    ESP_ERROR_CHECK( mqtt_prepare_settings() );
+    // Prepare global mqtt clientName (needed due to lack of named initializers in C99) 
+    // and init the manager.
+    ESP_ERROR_CHECK( initialiseMqttMgr() );
 
     // Start WiFi. Events will start/stop MQTT client
     ESP_ERROR_CHECK( esp_wifi_start() );
