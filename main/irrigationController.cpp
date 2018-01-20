@@ -24,21 +24,14 @@ void IrrigationController::start(void)
 /**
  * @brief This is the IrrigationController processing task.
  * 
- * It performs data collection, power managmenet of the sensors and the actual
- * decision wether or not to water the plants. It also updates the status information
- * with the gathered data.
- * 
- * Depending on the operation mode (i.e. keep awake jumper is set or otherwise 
- * enforced by software), it will loop within the task and periodically check for 
- * the next watering and perform status updates or it will bring the processor to 
- * deep sleep.
+ * It implements the control logic of the class. For details see the class description.
  * 
  * @param params Task parameters. Used to pass in the actual IrrigationController
  * instance the task function is running for.
  */
 void IrrigationController::taskFunc(void* params)
 {
-    IrrigationController const* caller = (IrrigationController*) params;
+    IrrigationController* caller = (IrrigationController*) params;
 
     EventBits_t events;
     TickType_t wait;
@@ -48,8 +41,8 @@ void IrrigationController::taskFunc(void* params)
 
     // Wait for WiFi to come up. TBD: make configurable (globally), implement WiFiManager for that
     wait = portMAX_DELAY;
-    if(caller->wifiConnecntedWaitMillis >= 0) {
-        wait = pdMS_TO_TICKS(caller->wifiConnecntedWaitMillis);
+    if(caller->wifiConnectedWaitMillis >= 0) {
+        wait = pdMS_TO_TICKS(caller->wifiConnectedWaitMillis);
     }
     events = xEventGroupWaitBits(wifiEvents, wifiEventConnected, 0, pdTRUE, wait);
     if(0 != (events & wifiEventConnected)) {

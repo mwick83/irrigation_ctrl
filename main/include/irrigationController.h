@@ -18,7 +18,17 @@
 #include "globalComponents.h"
 #include "wifiEvents.h"
 
-
+/**
+ * @brief The IrrigationController class is the heart of the software. It performs 
+ * data collection, power managmenet of the sensors and the actual
+ * decision wether or not to water the plants. It also updates the status information
+ * with the gathered data.
+ * 
+ * Depending on the operation mode (i.e. keep awake jumper is set or otherwise 
+ * enforced by software), it will loop within the task and periodically check for 
+ * the next watering and perform status updates or it will bring the processor to 
+ * deep sleep.
+ */
 class IrrigationController
 {
 private:
@@ -31,7 +41,7 @@ private:
     TaskHandle_t taskHandle;
 
     int timeSetWaitMillis = 10000; // TBD: from config
-    int wifiConnecntedWaitMillis = 10000; // TBD: from config
+    int wifiConnectedWaitMillis = 10000; // TBD: from config
 
     uint32_t wakeupIntervalMillis = 10000;
     uint64_t wakeupIntervalKeepAwakeMillis = 5000;
