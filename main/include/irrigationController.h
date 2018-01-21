@@ -51,6 +51,7 @@ private:
     int wifiConnectedWaitMillis = 10000; /**< Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
     int timeSetWaitMillis = 10000; /**< Timeout in milliseconds to wait for a valid system time */ // TBD: from config
     int mqttConnectedWaitMillis = 2000; /**< Timeout in milliseconds to wait for a MQTT client connection */ // TBD: from config
+    int mqttAllPublishedWaitMillis = 2000; /**< Timeout in milliseconds to wait for the MQTT client publishing all messages */ // TBD: from config
 
     uint32_t wakeupIntervalMillis = 10000; /**< Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
     uint64_t wakeupIntervalKeepAwakeMillis = 5000; /**< Processing task wakeup time in milliseconds when keepawake is active */

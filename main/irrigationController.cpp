@@ -117,7 +117,7 @@ void IrrigationController::taskFunc(void* params)
         // *********************
         // Get irrigation plan
 
-        // Update state
+        // Publish state
         caller->publishStateUpdate();
 
         // Perform the irrigation
@@ -126,9 +126,13 @@ void IrrigationController::taskFunc(void* params)
         pwrMgr.setPeripheralEnable(false);
         ESP_LOGD(caller->logTag, "DCDC + RS232 driver powered down.");
 
-        // Update state again on finish
+        // Publish state again on finish
+        //caller->publishStateUpdate();
 
         // Wait to get all updates through
+        if(!mqttMgr.waitAllPublished(caller->mqttAllPublishedWaitMillis)) {
+            ESP_LOGW(caller->logTag, "Waiting for MQTT to publish all messages didn't complete within timeout.");
+        }
 
         // *********************
         // Sleeping
