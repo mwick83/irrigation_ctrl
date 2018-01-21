@@ -6,6 +6,23 @@
  */
 IrrigationController::IrrigationController(void)
 {
+    size_t len = strlen(mqttTopicPre) + strlen(mqttStateTopicPost) + 12 + 1;
+    mqttStateTopic = (char*) calloc(len, sizeof(char));
+    
+    // Format string length + 5 digits volatage in mV + 4 digits (fillLevel * 10)
+    // Format string is a bit too long, but don't care too mich about those few bytes
+    mqttStateDataMaxLen = strlen(mqttStateDataFmt) + 5 + 4 + 1;
+    mqttStateData = (char*) calloc(mqttStateDataMaxLen, sizeof(char));
+}
+
+/**
+ * @brief Default destructor, which cleans up allocated data.
+ */
+IrrigationController::~IrrigationController(void)
+{
+    // TBD: graceful shutdown of task
+    if(mqttStateTopic) free(mqttStateTopic);
+    if(mqttStateData) free(mqttStateData);
 }
 
 /**
@@ -35,9 +52,6 @@ void IrrigationController::taskFunc(void* params)
 
     EventBits_t events;
     TickType_t wait;
-
-    int fillLevel;
-    float battVoltage;
 
     // Wait for WiFi to come up. TBD: make configurable (globally), implement WiFiManager for that
     wait = portMAX_DELAY;
@@ -84,12 +98,12 @@ void IrrigationController::taskFunc(void* params)
         // Fetch sensor data
         // *********************
         // Battery voltage
-        battVoltage = pwrMgr.getSupplyVoltageMilli();
-        ESP_LOGD(caller->logTag, "Batt voltage: %02.2f V", roundf(battVoltage * 0.1f) * 0.01f);
+        caller->state.battVoltage = pwrMgr.getSupplyVoltageMilli();
+        ESP_LOGD(caller->logTag, "Batt voltage: %02.2f V", roundf(caller->state.battVoltage * 0.1f) * 0.01f);
 
         // Fill level of the reservoir
-        fillLevel = fillSensor.getFillLevel();
-        ESP_LOGD(caller->logTag, "Fill level: %d", fillLevel);
+        caller->state.fillLevel = fillSensor.getFillLevel();
+        ESP_LOGD(caller->logTag, "Fill level: %d", caller->state.fillLevel);
 
         // Power down external supply already. Not needed anymore.
         pwrMgr.setPeripheralExtSupply(false);
@@ -142,9 +156,32 @@ void IrrigationController::taskFunc(void* params)
  */
 void IrrigationController::publishStateUpdate(void)
 {
+    static uint8_t mac_addr[6];
+    size_t preLen;
+    size_t postLen;
+
     if(false == mqttMgr.waitConnected(mqttConnectedWaitMillis)) {
         ESP_LOGW(logTag, "MQTT manager has no connection after timeout.")
     } else {
-        mqttMgr.publish("whan/irrig_ctrl/AABBCCDDEEFF/state", "yeah", 5, MqttManager::QOS_EXACTLY_ONCE, false);
+        if(!mqttPrepared) {
+            if(ESP_OK == esp_wifi_get_mac(ESP_IF_WIFI_STA, mac_addr)) {
+                preLen = strlen(mqttTopicPre);
+                postLen = strlen(mqttStateTopicPost);
+                memcpy(mqttStateTopic, mqttTopicPre, preLen);
+                for(int i=0; i<6; i++) {
+                    sprintf(&mqttStateTopic[preLen+i*2], "%02x", mac_addr[i]);
+                }
+                memcpy(&mqttStateTopic[preLen+12], mqttStateTopicPost, postLen);
+                mqttStateTopic[preLen+12+postLen] = 0;
+                mqttPrepared = true;
+            } else {
+                ESP_LOGE(logTag, "Getting MAC address failed!");
+            }
+        }
+
+        if(mqttPrepared) {
+            size_t actualLen = snprintf(mqttStateData, mqttStateDataMaxLen, mqttStateDataFmt, state.battVoltage, state.fillLevel);
+            mqttMgr.publish(mqttStateTopic, mqttStateData, actualLen, MqttManager::QOS_EXACTLY_ONCE, false);
+        }
     }
 }

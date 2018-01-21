@@ -19,7 +19,6 @@
 
 #include "user_config.h"
 
-
 class PowerManager
 {
 private:
@@ -44,7 +43,7 @@ private:
 public:
     PowerManager(void);
 
-    float getSupplyVoltageMilli(void);
+    uint32_t getSupplyVoltageMilli(void);
 
     void setPeripheralEnable(bool en);
     bool getPeripheralEnable(void);

@@ -46,7 +46,7 @@ PowerManager::PowerManager(void)
 
 // TBD: implement destructor for resource cleanup
 
-float PowerManager::getSupplyVoltageMilli(void)
+uint32_t PowerManager::getSupplyVoltageMilli(void)
 {
     int adcRaw;
     uint32_t millis = 0;
@@ -71,7 +71,8 @@ float PowerManager::getSupplyVoltageMilli(void)
         ESP_LOGE(logTag, "Error occurred during ADC conversion (batt voltage).");
     }
 
-    return result;
+    // return the rounded value (assumes positive floats)
+    return ((uint32_t)((result)+0.5));
 }
 
 void PowerManager::setPeripheralEnable(bool en)
