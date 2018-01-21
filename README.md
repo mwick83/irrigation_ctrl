@@ -2,7 +2,7 @@
 
 This is the software repository for the Irrigation Controller project.
 
-The hardware repository of the project can be found here (TBD).
+The hardware repository of the project can be found there: [https://github.com/mwick83/irrigation_ctrl_hw](https://github.com/mwick83/irrigation_ctrl_hw)
 
 I also blog about the project on [my website](https://www.matronix.de/tag/iop/) under the hashtag #IoP - Internet of Plants. Some of the documentation here is a compressed version of the already existing or future blog posts there.
 
@@ -18,7 +18,7 @@ I'm aiming at more flexibility in regard to watering the plants. The basic idea 
 
 In the first step, I'm going to implement just the fixed interval watering. That's more or less what the simple Gardena controller can do, but with the addition of monitoring the water reservoir. This will allow me to receive alarms, when the water level is too low. Additionally, the pump won't run dry anymore as it does with the Gardena controller.
 
-The second step will be adding more advanced logic to have make the watering more flexible. The basic idea will be to still to use fixed intervals, but drop waterings in case of rain or extend the watering time if the sun was shining heavily. I'm planning to address this step much later this year.
+The second step will be adding more advanced logic to make the watering more flexible. The basic idea will be to still to use fixed intervals, but drop waterings in case of rain or extend the watering time if the sun was shining heavily. I'm planning to address this step much later this year.
 
 ## Hardware platform
 
