@@ -1,7 +1,7 @@
 #ifndef SERIAL_PACKETIZER_H
 #define SERIAL_PACKETIZER_H
 
-#include <cstdint>
+#include <stdint.h>
 #include <cstdbool>
 #include <cstring>
 

@@ -1,7 +1,7 @@
 #ifndef IRRIGATION_CONTROLLER_H
 #define IRRIGATION_CONTROLLER_H
 
-#include <cstdint>
+#include <stdint.h>
 #include <cmath> // used for NAN
 
 #include "freertos/FreeRTOS.h"

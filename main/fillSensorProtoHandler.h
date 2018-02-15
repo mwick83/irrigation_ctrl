@@ -1,7 +1,7 @@
 #ifndef FILL_SENSOR_PROTO_HANDLER_H
 #define FILL_SENSOR_PROTO_HANDLER_H
 
-#include <cstdint>
+#include <stdint.h>
 #include <cstdbool>
 #include <cstring>
 

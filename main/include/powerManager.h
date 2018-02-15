@@ -1,7 +1,7 @@
 #ifndef POWER_MANAGER_H
 #define POWER_MANAGER_H
 
-#include <cstdint>
+#include <stdint.h>
 #include <cmath> // used for NAN
 
 #include "freertos/FreeRTOS.h"
