@@ -9,8 +9,8 @@
 #include "fillSensorProtoHandler.h"
 #include "timeSystem.h"
 #include "powerManager.h"
-#include "irrigationController.h"
 #include "mqttManager.h"
+#include "irrigationPlanner.h"
 
 extern FillSensorPacketizer fillSensorPacketizer;
 extern FillSensorProtoHandler<FillSensorPacketizer> fillSensor;
@@ -18,6 +18,8 @@ extern FillSensorProtoHandler<FillSensorPacketizer> fillSensor;
 extern PowerManager pwrMgr;
 
 extern MqttManager mqttMgr;
+
+extern IrrigationPlanner irrigPlanner;
 
 #endif
 

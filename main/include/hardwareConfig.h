@@ -41,4 +41,11 @@ static const gpio_num_t irrigationAux1GpioNum = GPIO_NUM_26;
 
 static const gpio_num_t keepAwakeGpioNum = GPIO_NUM_34;
 
+typedef enum {
+    CH_MAIN = 0,
+    CH_AUX0 = 1,
+    CH_AUX1 = 2,
+    CH_EXT0 = 8,
+} ch_map_t;
+
 #endif /* HARDWARE_CONFIG_H */

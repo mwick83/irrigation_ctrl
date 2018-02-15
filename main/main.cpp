@@ -18,6 +18,7 @@
 #include "wifiEvents.h"
 #include "globalComponents.h"
 #include "irrigationController.h"
+#include "irrigationPlanner.h"
 
 
 // ********************************************************************
@@ -39,8 +40,9 @@ PowerManager pwrMgr;
 // MQTT client manager
 MqttManager mqttMgr;
 
-// the actual controller
+// the actual controller and its planner
 IrrigationController irrigCtrl;
+IrrigationPlanner irrigPlanner;
 
 // ********************************************************************
 // WiFi handling
