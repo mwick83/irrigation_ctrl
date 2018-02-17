@@ -52,7 +52,7 @@ void IrrigationController::taskFunc(void* params)
 
     EventBits_t events;
     TickType_t wait;
-    time_t now, nextIrrigEvent;
+    time_t now, nextIrrigEvent, loopStartTime;
 
     // Wait for WiFi to come up. TBD: make configurable (globally), implement WiFiManager for that
     wait = portMAX_DELAY;
@@ -81,6 +81,8 @@ void IrrigationController::taskFunc(void* params)
     }
 
     while(1) {
+        loopStartTime = time(nullptr);
+
         // *********************
         // Power up needed peripherals, DCDC, ...
         // *********************
@@ -120,35 +122,59 @@ void IrrigationController::taskFunc(void* params)
         nextIrrigEvent = irrigPlanner.getNextEventTime();
         caller->state.nextIrrigEvent = nextIrrigEvent;
 
+        // Perform event actions if it is time now
+        if((nextIrrigEvent != 0) && (fabs(difftime(nextIrrigEvent, now)) < 0.1)) {
+            // TBD: get all events + their configs
+            ESP_LOGD(caller->logTag, "TBD: Events shall happen now!");
+        }
+
         // Publish state
         caller->publishStateUpdate();
 
-        // Perform the irrigation
-
+        // TBD: Check if any outputs are active
         // Power down the DCDC. Irrigation is done.
         pwrMgr.setPeripheralEnable(false);
         ESP_LOGD(caller->logTag, "DCDC + RS232 driver powered down.");
 
-        // Publish state again on finish
-        //caller->publishStateUpdate();
-
-        // Wait to get all updates through
-        if(!mqttMgr.waitAllPublished(caller->mqttAllPublishedWaitMillis)) {
-            ESP_LOGW(caller->logTag, "Waiting for MQTT to publish all messages didn't complete within timeout.");
-        }
-
         // *********************
         // Sleeping
         // *********************
-        // TBD: Use irrigation time for wakeup calculation
-        // TBD: Use boot time / last loop run for wakeup calculation
-        if(pwrMgr.getKeepAwake()) {
-            ESP_LOGD(caller->logTag, "Task is going to sleep.");
-            vTaskDelay(pdMS_TO_TICKS(caller->wakeupIntervalKeepAwakeMillis));
+        // get next event time and current time again for sleep calculation
+        nextIrrigEvent = irrigPlanner.getNextEventTime();
+        now = time(nullptr);
+
+        if((nextIrrigEvent != 0) && (difftime(nextIrrigEvent, now) <= 60.0)) {
+            ESP_LOGD(caller->logTag, "Next irrigation event is coming up soon: Task is going to sleep.");
+            vTaskDelay(pdMS_TO_TICKS(1000));
         } else {
-            ESP_LOGD(caller->logTag, "Preparing deep sleep.");
-            // TBD: stop webserver, mqtt and other stuff
-            pwrMgr.gotoSleep(caller->wakeupIntervalMillis);
+            if(pwrMgr.getKeepAwake()) {
+                int loopRunTimeMillis = (int) round(difftime(now, loopStartTime) * 1000.0);
+                ESP_LOGD(caller->logTag, "Loop runtime %d ms.", loopRunTimeMillis);
+
+                int delayMillis = caller->wakeupIntervalKeepAwakeMillis - loopRunTimeMillis;
+                if(delayMillis < 100) delayMillis = 100;
+
+                ESP_LOGD(caller->logTag, "Task is going to sleep for %d ms.", delayMillis);
+                vTaskDelay(pdMS_TO_TICKS(delayMillis));
+            } else {
+                // Wait to get all updates through
+                if(!mqttMgr.waitAllPublished(caller->mqttAllPublishedWaitMillis)) {
+                    ESP_LOGW(caller->logTag, "Waiting for MQTT to publish all messages didn't complete within timeout.");
+                }
+
+                // TBD: stop webserver, mqtt and other stuff
+
+                // The waiting above may have taken some time, so get current time again
+                now = time(nullptr);
+                int loopRunTimeMillis = (int) round(difftime(now, loopStartTime) * 1000.0);
+                ESP_LOGD(caller->logTag, "Loop runtime %d ms.", loopRunTimeMillis);
+
+                int sleepMillis = caller->wakeupIntervalMillis - loopRunTimeMillis;
+                if(sleepMillis < 100) sleepMillis = 100;
+
+                ESP_LOGD(caller->logTag, "Preparing deep sleep for %d ms.", sleepMillis);
+                pwrMgr.gotoSleep(sleepMillis);
+            }
         }
     }
 
