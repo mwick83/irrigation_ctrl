@@ -9,9 +9,9 @@ IrrigationController::IrrigationController(void)
     size_t len = strlen(mqttTopicPre) + strlen(mqttStateTopicPost) + 12 + 1;
     mqttStateTopic = (char*) calloc(len, sizeof(char));
     
-    // Format string length + 5 digits volatage in mV + 4 digits (fillLevel * 10)
+    // Format string length + 5 digits volatage in mV + 4 digits (fillLevel * 10) + 19 digits for the next event datetime
     // Format string is a bit too long, but don't care too mich about those few bytes
-    mqttStateDataMaxLen = strlen(mqttStateDataFmt) + 5 + 4 + 1;
+    mqttStateDataMaxLen = strlen(mqttStateDataFmt) + 5 + 4 + 19 + 1;
     mqttStateData = (char*) calloc(mqttStateDataMaxLen, sizeof(char));
 }
 
@@ -52,6 +52,7 @@ void IrrigationController::taskFunc(void* params)
 
     EventBits_t events;
     TickType_t wait;
+    time_t now, nextIrrigEvent;
 
     // Wait for WiFi to come up. TBD: make configurable (globally), implement WiFiManager for that
     wait = portMAX_DELAY;
@@ -81,7 +82,7 @@ void IrrigationController::taskFunc(void* params)
 
     while(1) {
         // *********************
-        // Power up needed peripheals, DCDC, ...
+        // Power up needed peripherals, DCDC, ...
         // *********************
         // Peripheral enable will power up the DCDC as well as the RS232 driver
         ESP_LOGD(caller->logTag, "Bringing up DCDC + RS232 driver.");
@@ -115,7 +116,9 @@ void IrrigationController::taskFunc(void* params)
         // *********************
         // Irrigation
         // *********************
-        // Get irrigation plan
+        now = time(nullptr);
+        nextIrrigEvent = irrigPlanner.getNextEventTime();
+        caller->state.nextIrrigEvent = nextIrrigEvent;
 
         // Publish state
         caller->publishStateUpdate();
@@ -161,6 +164,7 @@ void IrrigationController::taskFunc(void* params)
 void IrrigationController::publishStateUpdate(void)
 {
     static uint8_t mac_addr[6];
+    static char timeStr[20];
     size_t preLen;
     size_t postLen;
 
@@ -184,7 +188,12 @@ void IrrigationController::publishStateUpdate(void)
         }
 
         if(mqttPrepared) {
-            size_t actualLen = snprintf(mqttStateData, mqttStateDataMaxLen, mqttStateDataFmt, state.battVoltage, state.fillLevel);
+            time_t nextIrrigEvent = state.nextIrrigEvent;
+            struct tm nextIrrigEventTm;
+            localtime_r(&nextIrrigEvent, &nextIrrigEventTm);
+            strftime(timeStr, 20, "%Y-%m-%d %H:%M:%S", &nextIrrigEventTm);
+
+            size_t actualLen = snprintf(mqttStateData, mqttStateDataMaxLen, mqttStateDataFmt, state.battVoltage, state.fillLevel, timeStr);
             mqttMgr.publish(mqttStateTopic, mqttStateData, actualLen, MqttManager::QOS_EXACTLY_ONCE, false);
         }
     }

@@ -24,6 +24,8 @@ public:
     IrrigationPlanner(void);
     ~IrrigationPlanner(void);
 
+    time_t getNextEventTime(void);
+
 private:
     const char* logTag = "irrig_planner";
 

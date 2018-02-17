@@ -51,3 +51,40 @@ IrrigationPlanner::~IrrigationPlanner(void)
         delete *it;
     }
 }
+
+/**
+ * @brief Get the time of the next occuring event.
+ * 
+ * @return time_t Time of the next event
+ */
+time_t IrrigationPlanner::getNextEventTime(void)
+{
+    time_t now = time(nullptr);
+    time_t next = 0;
+
+    for(std::vector<IrrigationEvent*>::iterator it = events.begin() ; it != events.end(); ++it) {
+        (*it)->updateReferenceTime(now);
+        time_t eventTime = (*it)->getNextOccurance();
+
+        struct tm eventTm;
+        localtime_r(&eventTime, &eventTm);
+
+        for(int i = 0; i < (*it)->getChannelConfigSize(); i++) {
+            uint32_t chNum;
+            bool switchOn;
+            (*it)->getChannelConfigInfo(i, &chNum, &switchOn);
+            ESP_LOGD(logTag, "Event at %02d.%02d.%04d %02d:%02d:%02d, channel = %d, switchOn = %d", 
+                eventTm.tm_mday, eventTm.tm_mon+1, 1900+eventTm.tm_year,
+                eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec,
+                chNum, switchOn ? 1:0);
+        }
+
+        if((next == 0) || (next > eventTime)) {
+            ESP_LOGD(logTag, "This is our new candidate!");
+            next = eventTime;
+        }
+
+    }
+
+    return next;
+}
