@@ -141,6 +141,7 @@ time_t IrrigationEvent::getNextOccurance(void) const
         next = mktime(&nextTm);
     }
 
+    if(next < refTime) next = 0; // don't return events in the past
     return next;
 }
 
