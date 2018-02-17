@@ -101,7 +101,10 @@ void IrrigationEvent::updateReferenceTime(time_t ref)
 }
 
 /**
- * @brief Returns the next occurance of this event based on the set reference time.
+ * @brief Get the next occurance of this event based on the set reference time.
+ * 
+ * Note: If an event has exactly the same time as the reference, it will be reported
+ * as the next occurance, i.e. it will not be reported for the following day/week/month.
  * 
  * @return time_t Time of next occurance.
  */
@@ -129,9 +132,9 @@ time_t IrrigationEvent::getNextOccurance(void) const
 
         // Adjust day in case event has already passed today
         // Note: mktime below will fixup month/hour/... overflows
-        if((refTm.tm_hour > nextTm.tm_hour) || (refTm.tm_min > nextTm.tm_min) || (refTm.tm_sec > nextTm.tm_sec)) {
-            nextTm.tm_mday++;
-        } else if((refTm.tm_hour == nextTm.tm_hour) && (refTm.tm_min == nextTm.tm_min) && (refTm.tm_sec == nextTm.tm_sec)) {
+        uint32_t refDaySecs = refTm.tm_hour*60*60 + refTm.tm_min*60 + refTm.tm_sec;
+        uint32_t nextDaySecs = nextTm.tm_hour*60*60 + nextTm.tm_min*60 + nextTm.tm_sec;
+        if(refDaySecs > nextDaySecs) {
             nextTm.tm_mday++;
         }
 
