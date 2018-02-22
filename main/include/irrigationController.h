@@ -36,11 +36,11 @@ private:
 
     /** Internal state structure used for MQTT updates and persistant storage. */
     typedef struct {
-        int32_t fillLevel;                              /**< Fill level of reservoir in percent multiplied by 10.
-                                                         * Note: Will be -1 if getting the fill level failed.
-                                                        */
-        uint32_t battVoltage;                           /**< External battery supply voltage in mV. */
-        time_t nextIrrigEvent;                          /**< Next time an irrigation event occurs. */
+        int32_t fillLevel;                                  /**< Fill level of reservoir in percent multiplied by 10.
+                                                             * Note: Will be -1 if getting the fill level failed.
+                                                             */
+        uint32_t battVoltage;                               /**< External battery supply voltage in mV. */
+        time_t nextIrrigEvent;                              /**< Next time an irrigation event occurs. */
     } state_t;
 
     static const int taskStackSize = 2048;
@@ -49,20 +49,20 @@ private:
     StaticTask_t taskBuf;
     TaskHandle_t taskHandle;
 
-    int wifiConnectedWaitMillis = 10000;                /**< Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
-    int timeSetWaitMillis = 10000;                      /**< Timeout in milliseconds to wait for a valid system time */ // TBD: from config
-    int mqttConnectedWaitMillis = 2000;                 /**< Timeout in milliseconds to wait for a MQTT client connection */ // TBD: from config
-    int mqttAllPublishedWaitMillis = 2000;              /**< Timeout in milliseconds to wait for the MQTT client publishing all messages */ // TBD: from config
+    const int wifiConnectedWaitMillis = 10000;              /**< Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
+    const int timeSetWaitMillis = 10000;                    /**< Timeout in milliseconds to wait for a valid system time */ // TBD: from config
+    const int mqttConnectedWaitMillis = 2000;               /**< Timeout in milliseconds to wait for a MQTT client connection */ // TBD: from config
+    const int mqttAllPublishedWaitMillis = 2000;            /**< Timeout in milliseconds to wait for the MQTT client publishing all messages */ // TBD: from config
 
-    uint32_t wakeupIntervalMillis = 10000;              /**< Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
-    uint64_t wakeupIntervalKeepAwakeMillis = 5000;      /**< Processing task wakeup time in milliseconds when keepawake is active */
+    const uint32_t wakeupIntervalMillis = 10000;            /**< Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
+    const uint32_t wakeupIntervalKeepAwakeMillis = 5000;    /**< Processing task wakeup time in milliseconds when keepawake is active */
 
-    state_t state;                                      /**< Internal state representation */
+    state_t state;                                          /**< Internal state representation */
 
     // MQTT related state/data
     bool mqttPrepared = false;
-    const char* mqttTopicPre = "whan/irrigation/";      /**< MQTT topic prefix part (i.e. the part before the MAC address) */
-    const char* mqttStateTopicPost = "/state";          /**< MQTT topic postfix for state information (i.e. the part after the MAC address) */
+    const char* mqttTopicPre = "whan/irrigation/";          /**< MQTT topic prefix part (i.e. the part before the MAC address) */
+    const char* mqttStateTopicPost = "/state";              /**< MQTT topic postfix for state information (i.e. the part after the MAC address) */
 
     /** MQTT state update data format.
      * Needed format specifiers (in this order!): 
@@ -71,8 +71,8 @@ private:
      * - \%s Next irrigation event occurance ('YYYY-MM-DD HH:MM:SS')
      */
     const char* mqttStateDataFmt = "{ \"batteryVoltage\": %u, \"reservoirFillLevel\": %d, \"nextIrrigationEvent\": \"%s\" }";
-    char* mqttStateTopic;                               /**< @brief Buffer for the state topic. Will be allocated in constructor and freed in the destructor. */
-    char* mqttStateData;                                /**< @brief Buffer for the state data. Will be allocated in constructor and freed in the destructor. */
+    char* mqttStateTopic;                                   /**< @brief Buffer for the state topic. Will be allocated in constructor and freed in the destructor. */
+    char* mqttStateData;                                    /**< @brief Buffer for the state data. Will be allocated in constructor and freed in the destructor. */
     /** Maximum allowed length of the state data.
      * Will be determined by the constructor. Assumption: 5 digits for volatage (mV),
      * 4 digits for (fillLevel * 10), 19 digits for the next event datetime. */
