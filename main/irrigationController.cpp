@@ -51,8 +51,8 @@ void IrrigationController::taskFunc(void* params)
     IrrigationController* caller = (IrrigationController*) params;
 
     EventBits_t events;
-    TickType_t wait;
-    time_t now, nextIrrigEvent, loopStartTime;
+    TickType_t wait, loopStartTicks;
+    time_t now, nextIrrigEvent, lastIrrigEvent;
 
     // Wait for WiFi to come up. TBD: make configurable (globally), implement WiFiManager for that
     wait = portMAX_DELAY;
@@ -80,12 +80,22 @@ void IrrigationController::taskFunc(void* params)
         ESP_LOGD(caller->logTag, "Got time.");
     }
 
+    // properly initialize some time vars
+    {
+        now = time(nullptr);
+        struct tm nowTm;
+        localtime_r(&now, &nowTm);
+        nowTm.tm_sec--;
+        lastIrrigEvent = mktime(&nowTm);
+    }
+
     while(1) {
-        loopStartTime = time(nullptr);
+        loopStartTicks = xTaskGetTickCount();
 
         // *********************
         // Power up needed peripherals, DCDC, ...
         // *********************
+        // TBD: Check if DCDC is already up
         // Peripheral enable will power up the DCDC as well as the RS232 driver
         ESP_LOGD(caller->logTag, "Bringing up DCDC + RS232 driver.");
         pwrMgr.setPeripheralEnable(true);
@@ -118,18 +128,40 @@ void IrrigationController::taskFunc(void* params)
         // *********************
         // Irrigation
         // *********************
-        now = time(nullptr);
-        nextIrrigEvent = irrigPlanner.getNextEventTime();
-        caller->state.nextIrrigEvent = nextIrrigEvent;
+        int millisTillNextEvent;
+        bool eventsToProcess = true;
+        while(eventsToProcess) {
+            now = time(nullptr);
+            //nextIrrigEvent = irrigPlanner.getNextEventTime(now);
+            nextIrrigEvent = irrigPlanner.getNextEventTime(lastIrrigEvent, true);
+            caller->state.nextIrrigEvent = nextIrrigEvent;
+            millisTillNextEvent = (int) round(difftime(nextIrrigEvent, now) * 1000.0);
 
-        // Perform event actions if it is time now
-        if((nextIrrigEvent != 0) && (fabs(difftime(nextIrrigEvent, now)) < 0.1)) {
-            // TBD: get all events + their configs
-            ESP_LOGD(caller->logTag, "TBD: Events shall happen now!");
+            // Publish state with the updated next event time
+            caller->publishStateUpdate();
+
+            // Check if we are close to the upcoming event
+            if((nextIrrigEvent != 0) && (millisTillNextEvent <= caller->eventComingUpRangeMillis)) {
+                bool tightPoll = true;
+                while(tightPoll) {
+                    // Perform event actions if it is time now
+                    now = time(nullptr);
+                    double diffTime = difftime(nextIrrigEvent, now);
+                    // Event within delta or have we even overshot the target?
+                    if((nextIrrigEvent != 0) && ((fabs(diffTime) < 1.0) || (diffTime <= -1.0))) {
+                        // TBD: get all events + their configs
+                        ESP_LOGI(caller->logTag, "*************** TBD: Events shall happen now! ***************");
+                        lastIrrigEvent = nextIrrigEvent;
+                        tightPoll = false;
+                    } else {
+                        ESP_LOGD(caller->logTag, "Tight event poll.");
+                        vTaskDelay(pdMS_TO_TICKS(caller->tightPollMillis));
+                    }
+                }
+            } else {
+                eventsToProcess = false;
+            }
         }
-
-        // Publish state
-        caller->publishStateUpdate();
 
         // TBD: Check if any outputs are active
         // Power down the DCDC. Irrigation is done.
@@ -139,23 +171,28 @@ void IrrigationController::taskFunc(void* params)
         // *********************
         // Sleeping
         // *********************
-        // get next event time and current time again for sleep calculation
-        nextIrrigEvent = irrigPlanner.getNextEventTime();
+        // Get current time again for sleep calculation
+        // nextIrrigEvent is still valid from last loop run above
         now = time(nullptr);
+        millisTillNextEvent = (int) round(difftime(nextIrrigEvent, now) * 1000.0);
 
-        if((nextIrrigEvent != 0) && (difftime(nextIrrigEvent, now) <= 60.0)) {
-            ESP_LOGD(caller->logTag, "Next irrigation event is coming up soon: Task is going to sleep.");
-            vTaskDelay(pdMS_TO_TICKS(1000));
+        if((nextIrrigEvent != 0) && (millisTillNextEvent <= caller->eventComingUpRangeMillis)) {
+            ESP_LOGD(caller->logTag, "Event coming up soon. Not going to sleep.");
         } else {
             if(pwrMgr.getKeepAwake()) {
-                int loopRunTimeMillis = (int) round(difftime(now, loopStartTime) * 1000.0);
+                // calculate loop runtime and compensate the sleep time with it
+                TickType_t nowTicks = xTaskGetTickCount();
+                int loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > loopStartTicks) ? 
+                    (nowTicks - loopStartTicks) :
+                    (portMAX_DELAY - loopStartTicks + nowTicks + 1));
                 ESP_LOGD(caller->logTag, "Loop runtime %d ms.", loopRunTimeMillis);
 
-                int delayMillis = caller->wakeupIntervalKeepAwakeMillis - loopRunTimeMillis;
-                if(delayMillis < 100) delayMillis = 100;
+                int sleepMillis = caller->wakeupIntervalKeepAwakeMillis - loopRunTimeMillis;
+                if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - 100;
+                if(sleepMillis < 50) sleepMillis = 50;
 
-                ESP_LOGD(caller->logTag, "Task is going to sleep for %d ms.", delayMillis);
-                vTaskDelay(pdMS_TO_TICKS(delayMillis));
+                ESP_LOGD(caller->logTag, "Task is going to sleep for %d ms.", sleepMillis);
+                vTaskDelay(pdMS_TO_TICKS(sleepMillis));
             } else {
                 // Wait to get all updates through
                 if(!mqttMgr.waitAllPublished(caller->mqttAllPublishedWaitMillis)) {
@@ -164,16 +201,24 @@ void IrrigationController::taskFunc(void* params)
 
                 // TBD: stop webserver, mqtt and other stuff
 
-                // The waiting above may have taken some time, so get current time again
-                now = time(nullptr);
-                int loopRunTimeMillis = (int) round(difftime(now, loopStartTime) * 1000.0);
+                // calculate loop runtime and compensate the sleep time with it
+                TickType_t nowTicks = xTaskGetTickCount();
+                int loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > loopStartTicks) ? 
+                    (nowTicks - loopStartTicks) :
+                    (portMAX_DELAY - loopStartTicks + nowTicks + 1));
                 ESP_LOGD(caller->logTag, "Loop runtime %d ms.", loopRunTimeMillis);
 
                 int sleepMillis = caller->wakeupIntervalMillis - loopRunTimeMillis;
-                if(sleepMillis < 100) sleepMillis = 100;
+                if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - 100;
+                if(sleepMillis < 50) sleepMillis = 50;
 
-                ESP_LOGD(caller->logTag, "Preparing deep sleep for %d ms.", sleepMillis);
-                pwrMgr.gotoSleep(sleepMillis);
+                // check if there is enough wakeup time
+                if(sleepMillis < caller->eventComingUpRangeMillis) {
+                    ESP_LOGD(caller->logTag, "Event coming up sooner than deep sleep wakeup time. Not going to deep sleep.");
+                } else {
+                    ESP_LOGD(caller->logTag, "Preparing deep sleep for %d ms.", sleepMillis);
+                    pwrMgr.gotoSleep(sleepMillis);
+                }
             }
         }
     }

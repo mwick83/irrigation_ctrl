@@ -56,6 +56,8 @@ private:
 
     const uint32_t wakeupIntervalMillis = 10000;            /**< Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
     const uint32_t wakeupIntervalKeepAwakeMillis = 5000;    /**< Processing task wakeup time in milliseconds when keepawake is active */
+    const uint32_t eventComingUpRangeMillis = 60000;        /**< If an event is this close, don't go to deep sleep, but stay in a tight polling loop */
+    const uint32_t tightPollMillis = 250;                   /**< Polling interval when in close range to an event */
 
     state_t state;                                          /**< Internal state representation */
 

@@ -53,17 +53,38 @@ IrrigationPlanner::~IrrigationPlanner(void)
 }
 
 /**
- * @brief Get the time of the next occuring event.
+ * @brief Get the time of the next occuring event starting from now.
  * 
  * @return time_t Time of the next event
  */
 time_t IrrigationPlanner::getNextEventTime(void)
 {
     time_t now = time(nullptr);
+    return getNextEventTime(now, false);
+}
+
+/**
+ * @brief Get the time of the next occuring event starting at startTime.
+ * 
+ * @param startTime Start time to consider for searching the next occurance
+ * @param excludeStartTime If true, only search for events later than startTime, not equal.
+ * @return time_t Time of the next event
+ */
+time_t IrrigationPlanner::getNextEventTime(time_t startTime, bool excludeStartTime)
+{
     time_t next = 0;
 
+    if(excludeStartTime) {
+        // convert startTime to time to easily increase the startTime by one sec
+        struct tm startTimeTm;
+        localtime_r(&startTime, &startTimeTm);
+        startTimeTm.tm_sec++;
+        // and convert it back to time_t, inc. wrap-arounds
+        startTime = mktime(&startTimeTm);
+    }
+
     for(std::vector<IrrigationEvent*>::iterator it = events.begin() ; it != events.end(); ++it) {
-        (*it)->updateReferenceTime(now);
+        (*it)->updateReferenceTime(startTime);
         time_t eventTime = (*it)->getNextOccurance();
 
         struct tm eventTm;
