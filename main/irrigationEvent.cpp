@@ -8,6 +8,9 @@ IrrigationEvent::IrrigationEvent(void)
     // make this event invalid
     repetitionType = NOT_SET;
     refTime = 0;
+
+    // pre-allocate memory for chCfg
+    chCfg.reserve(chCfgPreAllocElements);
 }
 
 /**

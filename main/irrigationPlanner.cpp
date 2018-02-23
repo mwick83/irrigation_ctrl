@@ -5,6 +5,10 @@
  */
 IrrigationPlanner::IrrigationPlanner(void)
 {
+    // pre-allocate space for irrigation events to save some re-allocation time when
+    // adding elements below
+    events.reserve(8);
+
     IrrigationEvent* event;
 
     // Setup a fixed irrigation plan for now:
