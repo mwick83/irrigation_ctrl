@@ -14,6 +14,8 @@ CXXFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
 
 include $(IDF_PATH)/make/project.mk
 
+MONITOR_OPTS += --eol CRLF
+
 .PHONY: doc
 doc:
 	doxygen doc/Doxyfile
