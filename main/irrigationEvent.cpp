@@ -45,6 +45,28 @@ IrrigationEvent::err_t IrrigationEvent::getChannelConfigInfo(unsigned int num, u
     return ERR_OK;
 }
 
+/**
+ * @brief Get channel configuration for this event.
+ * 
+ * @param dest Pointer to a vector, which will be populated with the channel configuration.
+ * @return IrrigationEvent::err_t
+ * @retval ERR_OK on success.
+ * @retval ERR_INVALID_PARAM if dest is invalid.
+ */
+IrrigationEvent::err_t IrrigationEvent::appendChannelConfig(std::vector<ch_cfg_t>* dest)
+{
+    if(nullptr == dest) return ERR_INVALID_PARAM;
+
+    // reserve additional space before copying data over
+    dest->reserve(chCfg.size() + dest->size());
+
+    for(std::vector<ch_cfg_t>::iterator it = chCfg.begin() ; it != chCfg.end(); ++it) {
+        dest->push_back(*it);
+    }
+
+    return ERR_OK;
+}
+
 IrrigationEvent::err_t IrrigationEvent::setSingleEvent(int hour, int minute, int second,
     int day, int month, int year)
 {

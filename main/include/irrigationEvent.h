@@ -21,12 +21,19 @@ public:
         ERR_NO_CH_CFG = -3,
     } err_t;
 
+    /** Channel configuration structure to represent actions to be taken on event occurrence. */
+    typedef struct ch_cfg {
+        uint32_t chNum;     /**< Channel number associated with the action */
+        bool switchOn;      /**< Wether or not to switch the associated channel on */
+    } ch_cfg_t;
+
     IrrigationEvent(void);
     ~IrrigationEvent(void);
 
     void addChannelConfig(uint32_t chNum, bool switchOn);
     unsigned int getChannelConfigSize(void);
     err_t getChannelConfigInfo(unsigned int num, uint32_t* chNum, bool* switchOn);
+    err_t appendChannelConfig(std::vector<ch_cfg_t>* dest);
 
     err_t setSingleEvent(int hour, int minute, int second, int day, int month, int year);
     err_t setDailyRepetition(int hour, int minute, int second);
@@ -44,11 +51,6 @@ public:
     bool operator>=(const IrrigationEvent &rhs) const;
 
 private:
-    typedef struct ch_cfg {
-        uint32_t chNum;
-        bool switchOn;
-    } ch_cfg_t;
-
     typedef enum {
         NOT_SET = 0,
         SINGLE = 1,
@@ -57,11 +59,13 @@ private:
         MONTHLY = 4,
     } repetition_type_t;
 
-    std::vector<ch_cfg_t> chCfg; /**< Vector to store channel configurations associated to this event */
-    repetition_type_t repetitionType; /**< Stores the repetition type of this event */
-    struct tm eventTime; /**< Stores the time info of this event. Note: Its fields are only sparsely used. */
+    const int chCfgPreAllocElements = 4;            /**< Number of elements to pre-allocate for the chCfg vector */
 
-    time_t refTime; /**< Stores the reference time for time comparisions and the next occurance. */
+    std::vector<ch_cfg_t> chCfg;                    /**< Vector to store channel configurations associated to this event */
+    repetition_type_t repetitionType;               /**< Stores the repetition type of this event */
+    struct tm eventTime;                            /**< Stores the time info of this event. Note: Its fields are only sparsely used. */
+
+    time_t refTime;                                 /**< Stores the reference time for time comparisions and the next occurance */
 };
 
 #endif /* IRRIGATION_EVENT_H */
