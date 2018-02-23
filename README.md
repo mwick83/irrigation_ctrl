@@ -74,7 +74,7 @@ ToBeDone: Document the following steps:
 
 The following projects are used as additional components. Some of them are from third parties or forked versions of third party components/libraries:
 
-* [console-esp32](https://github.com/mwick83/console-esp32): The command console. It is based on [Elecia White's command console](https://github.com/eleciawhite/reusable/) and was ported by me to the ESP32 and lives in my gitub repository. The original code was published in the public domain. Be sure to check out here embedded software engineering podcast [Embedded.fm](http://embedded.fm/). Thanks Elecia!
+* [console-esp32](https://github.com/mwick83/console-esp32): The command console. It is based on [Elecia White's command console](https://github.com/eleciawhite/reusable/) and was ported by me to the ESP32 and lives in my gitub repository. The original code was published in the public domain. Be sure to check out her embedded software engineering podcast [Embedded.fm](http://embedded.fm/). Thanks Elecia!
 * [espmqtt](https://github.com/mwick83/espmqtt): The MQTT client library by Tuan PM. I forked it to modify its configuration mechanism. You can find the [original repo here](https://github.com/tuanpmt/espmqtt). It is licensed under the Apache-2.0 license.
 
 The following components are implemented by me and have their own github repositories:
