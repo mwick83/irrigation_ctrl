@@ -149,8 +149,20 @@ void IrrigationController::taskFunc(void* params)
                     double diffTime = difftime(nextIrrigEvent, now);
                     // Event within delta or have we even overshot the target?
                     if((nextIrrigEvent != 0) && ((fabs(diffTime) < 1.0) || (diffTime <= -1.0))) {
-                        // TBD: get all events + their configs
-                        ESP_LOGI(caller->logTag, "*************** TBD: Events shall happen now! ***************");
+                        struct tm eventTm;
+                        localtime_r(&nextIrrigEvent, &eventTm);
+                        ESP_LOGI(caller->logTag, "Actions to perform for event at %02d.%02d.%04d %02d:%02d:%02d",
+                            eventTm.tm_mday, eventTm.tm_mon+1, 1900+eventTm.tm_year,
+                            eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec);
+
+                        std::vector<IrrigationEvent::ch_cfg_t> chCfg;
+                        irrigPlanner.getEventChannelConfig(nextIrrigEvent, &chCfg);
+                        for(std::vector<IrrigationEvent::ch_cfg_t>::iterator chIt = chCfg.begin(); chIt != chCfg.end(); chIt++) {
+                            ESP_LOGI(caller->logTag, "  * Channel: %s, state: %s", 
+                                CH_MAP_TO_STR((*chIt).chNum), (*chIt).switchOn ? "ON" : "OFF");
+                            // TBD: actually perfom it, if fillLevel & batt are okay
+                        }
+
                         lastIrrigEvent = nextIrrigEvent;
                         tightPoll = false;
                     } else {

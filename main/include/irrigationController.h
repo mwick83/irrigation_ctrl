@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <cmath> // used for NAN
+#include <vector>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
