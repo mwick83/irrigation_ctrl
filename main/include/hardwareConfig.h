@@ -48,4 +48,12 @@ typedef enum {
     CH_EXT0 = 8,
 } ch_map_t;
 
+#define CH_MAP_TO_STR(num) (\
+    (num == CH_MAIN) ? "MAIN" : \
+    (num == CH_AUX0) ? "AUX0" : \
+    (num == CH_AUX1) ? "AUX1" : \
+    (num == CH_EXT0) ? "EXT0" : \
+    "UNKOWN" \
+)
+
 #endif /* HARDWARE_CONFIG_H */
