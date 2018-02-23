@@ -19,6 +19,9 @@ class IrrigationPlanner
 public:
     typedef enum {
         ERR_OK = 0,
+        ERR_INVALID_PARAM = -1,
+        ERR_NO_EVENT_DATA_FOUND = -2,
+        ERR_PARTIAL_EVENT_DATA = -3,
     } err_t;
 
     IrrigationPlanner(void);
@@ -26,6 +29,7 @@ public:
 
     time_t getNextEventTime(void);
     time_t getNextEventTime(time_t startTime, bool excludeStartTime);
+    err_t getEventChannelConfig(time_t eventTime, std::vector<IrrigationEvent::ch_cfg_t>* dest);
 
 private:
     const char* logTag = "irrig_planner";

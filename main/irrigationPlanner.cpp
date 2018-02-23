@@ -72,11 +72,12 @@ time_t IrrigationPlanner::getNextEventTime(void)
  * 
  * @param startTime Start time to consider for searching the next occurance
  * @param excludeStartTime If true, only search for events later than startTime, not equal.
- * @return time_t Time of the next event
+ * @return time_t Time of the next event.
  */
 time_t IrrigationPlanner::getNextEventTime(time_t startTime, bool excludeStartTime)
 {
     time_t next = 0;
+    std::vector<IrrigationEvent::ch_cfg_t> chCfg;
 
     if(excludeStartTime) {
         // convert startTime to time to easily increase the startTime by one sec
@@ -94,14 +95,13 @@ time_t IrrigationPlanner::getNextEventTime(time_t startTime, bool excludeStartTi
         struct tm eventTm;
         localtime_r(&eventTime, &eventTm);
 
-        for(int i = 0; i < (*it)->getChannelConfigSize(); i++) {
-            uint32_t chNum;
-            bool switchOn;
-            (*it)->getChannelConfigInfo(i, &chNum, &switchOn);
+        chCfg.clear();
+        (*it)->appendChannelConfig(&chCfg);
+        for(std::vector<IrrigationEvent::ch_cfg_t>::iterator chIt = chCfg.begin(); chIt != chCfg.end(); chIt++) {
             ESP_LOGD(logTag, "Event at %02d.%02d.%04d %02d:%02d:%02d, channel = %d, switchOn = %d", 
                 eventTm.tm_mday, eventTm.tm_mon+1, 1900+eventTm.tm_year,
                 eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec,
-                chNum, switchOn ? 1:0);
+                (*chIt).chNum, (*chIt).switchOn ? 1:0);
         }
 
         if((next == 0) || (next > eventTime)) {
@@ -112,4 +112,47 @@ time_t IrrigationPlanner::getNextEventTime(time_t startTime, bool excludeStartTi
     }
 
     return next;
+}
+
+/**
+ * @brief Get all channel configurations for the specified time.
+ * 
+ * The returned channel configurations are the collection of all events
+ * occurring at the specified time. There will be no destinction between 
+ * multiple events.
+ * 
+ * Note: The vector pointed to by dest will be cleared.
+ * 
+ * @param eventTime Time to get the channel config infos for.
+ * @param dest Pointer to a vector, which will be populated with the channel configuration.
+ * @return IrrigationPlanner::err_t 
+ * @retval ERR_OK Success.
+ * @retval ERR_INVALID_PARAM dest is invalid.
+ * @retval ERR_PARTIAL_EVENT_DATA An error occured while getting one of the channel configurations. Data may be incomplete.
+ * @retval ERR_NO_EVENT_DATA_FOUND No event or no channel configurations could be found for the specified time.
+ */
+IrrigationPlanner::err_t IrrigationPlanner::getEventChannelConfig(time_t eventTime,
+    std::vector<IrrigationEvent::ch_cfg_t>* dest)
+{
+    err_t ret = ERR_OK;
+    if(nullptr == dest) return ERR_INVALID_PARAM;
+
+
+    // clear destination vector
+    dest->clear();
+
+    for(std::vector<IrrigationEvent*>::iterator it = events.begin() ; it != events.end(); ++it) {
+        (*it)->updateReferenceTime(eventTime);
+        time_t curEventTime = (*it)->getNextOccurance();
+
+        if(curEventTime == eventTime) {
+            if(IrrigationEvent::ERR_OK != (*it)->appendChannelConfig(dest)) {
+                ret = ERR_PARTIAL_EVENT_DATA;
+            }
+        }
+    }
+
+    if((ERR_OK == ret) && (dest->size() == 0)) ret = ERR_NO_EVENT_DATA_FOUND;
+
+    return ret;
 }
