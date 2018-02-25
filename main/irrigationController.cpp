@@ -180,6 +180,10 @@ void IrrigationController::taskFunc(void* params)
         pwrMgr.setPeripheralEnable(false);
         ESP_LOGD(caller->logTag, "DCDC + RS232 driver powered down.");
 
+        // TBD: There was some sleep-time calculation issue when the device hadn't got the time via NTP (i.e. timeout
+        // happend above. I guess it became available within the processing and hence the calculation overflowed/got
+        // wrong (nextIrrigEvent muuuuuuch before now below).
+
         // *********************
         // Sleeping
         // *********************
@@ -192,7 +196,7 @@ void IrrigationController::taskFunc(void* params)
             ESP_LOGD(caller->logTag, "Event coming up soon. Not going to sleep.");
         } else {
             if(pwrMgr.getKeepAwake()) {
-                // calculate loop runtime and compensate the sleep time with it
+                // Calculate loop runtime and compensate the sleep time with it
                 TickType_t nowTicks = xTaskGetTickCount();
                 int loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > loopStartTicks) ? 
                     (nowTicks - loopStartTicks) :
@@ -213,7 +217,7 @@ void IrrigationController::taskFunc(void* params)
 
                 // TBD: stop webserver, mqtt and other stuff
 
-                // calculate loop runtime and compensate the sleep time with it
+                // Calculate loop runtime and compensate the sleep time with it
                 TickType_t nowTicks = xTaskGetTickCount();
                 int loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > loopStartTicks) ? 
                     (nowTicks - loopStartTicks) :
@@ -224,10 +228,17 @@ void IrrigationController::taskFunc(void* params)
                 if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - 100;
                 if(sleepMillis < 50) sleepMillis = 50;
 
-                // check if there is enough wakeup time
-                if(sleepMillis < caller->eventComingUpRangeMillis) {
+                // Check if there is enough wakeup time
+                if( (sleepMillis < caller->eventComingUpRangeMillis) && 
+                    (millisTillNextEvent <= caller->eventComingUpRangeMillis) ) {
                     ESP_LOGD(caller->logTag, "Event coming up sooner than deep sleep wakeup time. Not going to deep sleep.");
-                } else {
+                }
+                // Check if any outputs are active, deep sleep would kill them!
+                // else if(outputCtrl.anyOutputsActive()) {
+                //     ESP_LOGD(caller->logTag, "Outputs active, task is going to sleep for %d ms insted of deep sleep.", sleepMillis);
+                //     vTaskDelay(pdMS_TO_TICKS(sleepMillis));
+                // }
+                else {
                     ESP_LOGD(caller->logTag, "Preparing deep sleep for %d ms.", sleepMillis);
                     pwrMgr.gotoSleep(sleepMillis);
                 }
