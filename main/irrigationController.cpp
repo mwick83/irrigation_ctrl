@@ -89,23 +89,29 @@ void IrrigationController::taskFunc(void* params)
         lastIrrigEvent = mktime(&nowTm);
     }
 
+    // TBD: reset lastIrrigEvent if time is adjusted
+
     while(1) {
         loopStartTicks = xTaskGetTickCount();
 
         // *********************
         // Power up needed peripherals, DCDC, ...
         // *********************
-        // TBD: Check if DCDC is already up
         // Peripheral enable will power up the DCDC as well as the RS232 driver
-        ESP_LOGD(caller->logTag, "Bringing up DCDC + RS232 driver.");
-        pwrMgr.setPeripheralEnable(true);
-        // Wait for stable DCDC: According to datasheet soft-start is 2.1ms
-        vTaskDelay(pdMS_TO_TICKS(5));
+        if(!pwrMgr.getPeripheralEnable()) {
+            ESP_LOGD(caller->logTag, "Bringing up DCDC + RS232 driver.");
+            pwrMgr.setPeripheralEnable(true);
+            // Wait for stable DCDC: According to datasheet soft-start is 2.1ms
+            vTaskDelay(pdMS_TO_TICKS(5));
+        }
+
         // Enable external sensor power
-        ESP_LOGD(caller->logTag, "Powering external sensors.");
-        pwrMgr.setPeripheralExtSupply(true);
-        // Wait a bit more for external sensors to power up properly
-        vTaskDelay(pdMS_TO_TICKS(100));
+        if(!pwrMgr.getPeripheralExtSupply()) {
+            ESP_LOGD(caller->logTag, "Powering external sensors.");
+            pwrMgr.setPeripheralExtSupply(true);
+            // Wait a bit more for external sensors to power up properly
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
 
         // *********************
         // Fetch sensor data
@@ -149,6 +155,8 @@ void IrrigationController::taskFunc(void* params)
                     double diffTime = difftime(nextIrrigEvent, now);
                     // Event within delta or have we even overshot the target?
                     if((nextIrrigEvent != 0) && ((fabs(diffTime) < 1.0) || (diffTime <= -1.0))) {
+                        TimeSystem_LogTime();
+
                         struct tm eventTm;
                         localtime_r(&nextIrrigEvent, &eventTm);
                         ESP_LOGI(caller->logTag, "Actions to perform for event at %02d.%02d.%04d %02d:%02d:%02d",
@@ -160,7 +168,8 @@ void IrrigationController::taskFunc(void* params)
                         for(std::vector<IrrigationEvent::ch_cfg_t>::iterator chIt = chCfg.begin(); chIt != chCfg.end(); chIt++) {
                             ESP_LOGI(caller->logTag, "  * Channel: %s, state: %s", 
                                 CH_MAP_TO_STR((*chIt).chNum), (*chIt).switchOn ? "ON" : "OFF");
-                            // TBD: actually perfom it, if fillLevel & batt are okay
+                            // TBD: check fillLevel & batt
+                            outputCtrl.setOutput((OutputController::ch_map_t) (*chIt).chNum, (*chIt).switchOn);
                         }
 
                         lastIrrigEvent = nextIrrigEvent;
@@ -175,10 +184,11 @@ void IrrigationController::taskFunc(void* params)
             }
         }
 
-        // TBD: Check if any outputs are active
-        // Power down the DCDC. Irrigation is done.
-        pwrMgr.setPeripheralEnable(false);
-        ESP_LOGD(caller->logTag, "DCDC + RS232 driver powered down.");
+        // Power down the DCDC if no outputs are active.
+        if(!outputCtrl.anyOutputsActive()) {
+            pwrMgr.setPeripheralEnable(false);
+            ESP_LOGD(caller->logTag, "DCDC + RS232 driver powered down.");
+        }
 
         // TBD: There was some sleep-time calculation issue when the device hadn't got the time via NTP (i.e. timeout
         // happend above. I guess it became available within the processing and hence the calculation overflowed/got
@@ -234,10 +244,10 @@ void IrrigationController::taskFunc(void* params)
                     ESP_LOGD(caller->logTag, "Event coming up sooner than deep sleep wakeup time. Not going to deep sleep.");
                 }
                 // Check if any outputs are active, deep sleep would kill them!
-                // else if(outputCtrl.anyOutputsActive()) {
-                //     ESP_LOGD(caller->logTag, "Outputs active, task is going to sleep for %d ms insted of deep sleep.", sleepMillis);
-                //     vTaskDelay(pdMS_TO_TICKS(sleepMillis));
-                // }
+                else if(outputCtrl.anyOutputsActive()) {
+                    ESP_LOGD(caller->logTag, "Outputs active, task is going to sleep for %d ms insted of deep sleep.", sleepMillis);
+                    vTaskDelay(pdMS_TO_TICKS(sleepMillis));
+                }
                 else {
                     ESP_LOGD(caller->logTag, "Preparing deep sleep for %d ms.", sleepMillis);
                     pwrMgr.gotoSleep(sleepMillis);

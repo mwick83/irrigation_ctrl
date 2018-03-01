@@ -1,5 +1,7 @@
 #include "irrigationPlanner.h"
 
+#include "outputController.h" //temporarily needed for CH_MAIN, ...
+
 /**
  * @brief Default constructor, which performs basic initialization.
  */
@@ -18,11 +20,11 @@ IrrigationPlanner::IrrigationPlanner(void)
     for(int i = 0; i < (sizeof(hours)/sizeof(hours[0])); i++) {
         event = new IrrigationEvent();
         event->setDailyRepetition(hours[i], 0, 0);
-        event->addChannelConfig(CH_MAIN, true);
+        event->addChannelConfig(OutputController::CH_MAIN, true);
         events.push_back(event);
         event = new IrrigationEvent();
         event->setDailyRepetition(hours[i], 1, 0);
-        event->addChannelConfig(CH_MAIN, false);
+        event->addChannelConfig(OutputController::CH_MAIN, false);
         events.push_back(event);
     }
 

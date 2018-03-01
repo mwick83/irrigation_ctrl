@@ -30,17 +30,11 @@ EventGroupHandle_t wifiEvents;
 const int wifiEventConnected = (1<<0);
 const int wifiEventDisconnected = (1<<1);
 
-// external fill level sensor
 FillSensorPacketizer fillSensorPacketizer;
 FillSensorProtoHandler<FillSensorPacketizer> fillSensor(&fillSensorPacketizer);
-
-// power manager
 PowerManager pwrMgr;
-
-// MQTT client manager
+OutputController outputCtrl;
 MqttManager mqttMgr;
-
-// the actual controller and its planner
 IrrigationController irrigCtrl;
 IrrigationPlanner irrigPlanner;
 
