@@ -35,6 +35,9 @@ std::vector<TimeSystem_HookFncPtr> TimeSystem_Hooks;
 std::vector<void*> TimeSystem_HookParamPtrs;
 static void TimeSystem_CallHooks(time_system_event_t event);
 
+SemaphoreHandle_t TimeSystem_HookMutex;
+StaticSemaphore_t TimeSystem_HookMutexBuf;
+
 // ********************************************************************
 // time system initialization
 // ********************************************************************
@@ -46,6 +49,8 @@ extern "C" void TimeSystem_Init(void)
     timeEvents = xEventGroupCreate();
     TimeSystem_Hooks.clear();
     TimeSystem_HookParamPtrs.clear();
+
+    TimeSystem_HookMutex = xSemaphoreCreateMutexStatic(&TimeSystem_HookMutexBuf);
 
     ESP_LOGI(LOG_TAG_TIME, "Checking if time is already set.");
     time(&now);
@@ -134,21 +139,31 @@ extern "C" int TimeSystem_SetTime(int16_t day, int16_t month, int16_t year, int1
 // ********************************************************************
 void TimeSystem_CallHooks(time_system_event_t event)
 {
-    int numHooks = TimeSystem_Hooks.size();
-    int numParams = TimeSystem_HookParamPtrs.size();
-    if(numParams < numHooks) numHooks = numParams;
+    if(pdTRUE == xSemaphoreTake(TimeSystem_HookMutex, portMAX_DELAY)) {
+        for(int i = 0; i < TimeSystem_Hooks.size(); i++) {
+            TimeSystem_Hooks[i](TimeSystem_HookParamPtrs[i], event);
+        }
 
-    for(int i = 0; i < numHooks; i++) {
-        TimeSystem_Hooks[i](TimeSystem_HookParamPtrs[i], event);
+        if(pdFALSE == xSemaphoreGive(TimeSystem_HookMutex)) {
+            ESP_LOGE(LOG_TAG_TIME, "Error occurred releasing the TimeSystem_HookMutex.");
+        }
+    } else {
+        ESP_LOGE(LOG_TAG_TIME, "Error occurred acquiring the TimeSystem_HookMutex.");
     }
 }
 
 void TimeSystem_RegisterHook(TimeSystem_HookFncPtr hook, void* param)
 {
-    // TBD: looking for multi-threading
+    if(pdTRUE == xSemaphoreTake(TimeSystem_HookMutex, portMAX_DELAY)) {
+        TimeSystem_Hooks.push_back(hook);
+        TimeSystem_HookParamPtrs.push_back(param);
 
-    TimeSystem_Hooks.push_back(hook);
-    TimeSystem_HookParamPtrs.push_back(param);
+        if(pdFALSE == xSemaphoreGive(TimeSystem_HookMutex)) {
+            ESP_LOGE(LOG_TAG_TIME, "Error occurred releasing the TimeSystem_HookMutex.");
+        }
+    } else {
+        ESP_LOGE(LOG_TAG_TIME, "Error occurred acquiring the TimeSystem_HookMutex.");
+    }
 }
 
 // ********************************************************************
