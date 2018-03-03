@@ -45,4 +45,7 @@ static const int battCriticalThresholdMilli = 11900;
 static const int battLowThresholdMilli = 12100;
 static const int battOkThresholdMilli = 13800;
 
+static const int fillLevelCriticalThreshold = 125;
+static const int fillLevelLowThreshold = 250;
+
 #endif /* HARDWARE_CONFIG_H */

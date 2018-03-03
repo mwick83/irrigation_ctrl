@@ -19,6 +19,13 @@
 #include "globalComponents.h"
 #include "wifiEvents.h"
 
+#define RESERVOIR_STATE_TO_STR(state) (\
+    (state == IrrigationController::RESERVOIR_OK) ? "OK" : \
+    (state == IrrigationController::RESERVOIR_LOW) ? "LOW" : \
+    (state == IrrigationController::RESERVOIR_CRITICAL) ? "CRITICAL" : \
+    "UNKOWN" \
+)
+
 /**
  * @brief The IrrigationController class is the heart of the software. It performs 
  * data collection, power managmenet of the sensors and the actual
@@ -35,12 +42,20 @@ class IrrigationController
 private:
     const char* logTag = "irrig_ctrl";
 
+    typedef enum {
+        RESERVOIR_OK = 0,
+        RESERVOIR_LOW = 1,
+        RESERVOIR_CRITICAL = 2
+    } reservoir_state_t;
+
     /** Internal state structure used for MQTT updates and persistant storage. */
     typedef struct {
         int32_t fillLevel;                                  /**< Fill level of reservoir in percent multiplied by 10.
                                                              * Note: Will be -1 if getting the fill level failed.
                                                              */
+        reservoir_state_t reservoirState;                   /**< State of the reservoir (e.g. RESERVOIR_OK, ...) */
         uint32_t battVoltage;                               /**< External battery supply voltage in mV. */
+        PowerManager::batt_state_t battState;               /**< State of the battery (e.g. BATT_FULL, BATT_OK, ...) */
         time_t nextIrrigEvent;                              /**< Next time an irrigation event occurs. */
     } state_t;
 
@@ -70,15 +85,25 @@ private:
     /** MQTT state update data format.
      * Needed format specifiers (in this order!): 
      * - \%u Battery voltage in mV,
+     * - \%u Battery state (0..3),
+     * - \%s Battery state string representation,
      * - \%d Reservoir fill level (multiplied by 10),
+     * - \%u Reservoir state (0..2),
+     * - \%s Reservoir state string representation,
      * - \%s Next irrigation event occurance ('YYYY-MM-DD HH:MM:SS')
      */
-    const char* mqttStateDataFmt = "{ \"batteryVoltage\": %u, \"reservoirFillLevel\": %d, \"nextIrrigationEvent\": \"%s\" }";
+    const char* mqttStateDataFmt = "{\n  \"batteryVoltage\": %u,\n  \"batteryState\": %u,\n"
+        "  \"batteryStateStr\": \"%s\",\n"
+        "  \"reservoirFillLevel\": %d,\n  \"reservoirState\": %u,\n  \"reservoirStateStr\": \"%s\",\n"
+        "  \"nextIrrigationEvent\": \"%s\"\n}";
     char* mqttStateTopic;                                   /**< @brief Buffer for the state topic. Will be allocated in constructor and freed in the destructor. */
     char* mqttStateData;                                    /**< @brief Buffer for the state data. Will be allocated in constructor and freed in the destructor. */
     /** Maximum allowed length of the state data.
-     * Will be determined by the constructor. Assumption: 5 digits for volatage (mV),
-     * 4 digits for (fillLevel * 10), 19 digits for the next event datetime. */
+     * Will be determined by the constructor. Assumption: 5 digits for battery voltage (mV),
+     * 1 digit for battery state, 8 digits for battery state string,
+     * 4 digits for (fillLevel * 10), 1 digit for reservoir state,
+     * 8 digits for reservoir state string,
+     * 19 digits for the next event datetime. */
     size_t mqttStateDataMaxLen;
 
     static void taskFunc(void* params);

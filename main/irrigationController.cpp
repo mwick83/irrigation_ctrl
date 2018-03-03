@@ -9,9 +9,12 @@ IrrigationController::IrrigationController(void)
     size_t len = strlen(mqttTopicPre) + strlen(mqttStateTopicPost) + 12 + 1;
     mqttStateTopic = (char*) calloc(len, sizeof(char));
     
-    // Format string length + 5 digits volatage in mV + 4 digits (fillLevel * 10) + 19 digits for the next event datetime
+    // Format string length + 5 digits voltage in mV + 1 digit batt state + 8 digits for battery state string +
+    // 4 digits (fillLevel * 10) + 1 digit for reservoir state,
+    // 8 digits for reservoir state string, 
+    // 19 digits for the next event datetime.
     // Format string is a bit too long, but don't care too mich about those few bytes
-    mqttStateDataMaxLen = strlen(mqttStateDataFmt) + 5 + 4 + 19 + 1;
+    mqttStateDataMaxLen = strlen(mqttStateDataFmt) + 5 + 1 + 8 + 4 + 1 + 8 + 19 + 1;
     mqttStateData = (char*) calloc(mqttStateDataMaxLen, sizeof(char));
 
     // Prepare time system event hook to react properly on time changes
@@ -124,11 +127,21 @@ void IrrigationController::taskFunc(void* params)
         // *********************
         // Battery voltage
         caller->state.battVoltage = pwrMgr.getSupplyVoltageMilli();
-        ESP_LOGD(caller->logTag, "Batt voltage: %02.2f V", roundf(caller->state.battVoltage * 0.1f) * 0.01f);
+        caller->state.battState = pwrMgr.getBatteryState(caller->state.battVoltage);
+        ESP_LOGD(caller->logTag, "Batt voltage: %02.2f V (%s)", roundf(caller->state.battVoltage * 0.1f) * 0.01f,
+            BATT_STATE_TO_STR(caller->state.battState));
 
         // Fill level of the reservoir
         caller->state.fillLevel = fillSensor.getFillLevel();
-        ESP_LOGD(caller->logTag, "Fill level: %d", caller->state.fillLevel);
+        if(caller->state.fillLevel >= fillLevelLowThreshold) {
+            caller->state.reservoirState = RESERVOIR_OK;
+        } else if (caller->state.fillLevel >= fillLevelCriticalThreshold) {
+            caller->state.reservoirState = RESERVOIR_LOW;
+        } else {
+            caller->state.reservoirState = RESERVOIR_CRITICAL;
+        }
+        ESP_LOGD(caller->logTag, "Fill level: %d (%s)", caller->state.fillLevel, 
+            RESERVOIR_STATE_TO_STR(caller->state.reservoirState));
 
         // Power down external supply already. Not needed anymore.
         pwrMgr.setPeripheralExtSupply(false);
@@ -173,6 +186,17 @@ void IrrigationController::taskFunc(void* params)
             if((nextIrrigEvent != 0) && ((fabs(diffTime) < 1.0) || (diffTime <= -1.0))) {
                 TimeSystem_LogTime();
 
+                // Check preconditions for the irrigation, i.e. battery state and reservoir fill level
+                bool irrigOk = true;
+                if(caller->state.battState == PowerManager::BATT_CRITICAL) {
+                    ESP_LOGE(caller->logTag, "Battery state is critical! Dropping irrigation.");
+                    irrigOk = false;
+                }
+                if(caller->state.reservoirState == RESERVOIR_CRITICAL) {
+                    ESP_LOGE(caller->logTag, "Reservoir fill level is critical! Dropping irrigation.");
+                    irrigOk = false;
+                }
+
                 struct tm eventTm;
                 localtime_r(&nextIrrigEvent, &eventTm);
                 ESP_LOGI(caller->logTag, "Actions to perform for event at %02d.%02d.%04d %02d:%02d:%02d",
@@ -184,8 +208,11 @@ void IrrigationController::taskFunc(void* params)
                 for(std::vector<IrrigationEvent::ch_cfg_t>::iterator chIt = chCfg.begin(); chIt != chCfg.end(); chIt++) {
                     ESP_LOGI(caller->logTag, "  * Channel: %s, state: %s", 
                         CH_MAP_TO_STR((*chIt).chNum), (*chIt).switchOn ? "ON" : "OFF");
-                    // TBD: check fillLevel & batt
-                    outputCtrl.setOutput((OutputController::ch_map_t) (*chIt).chNum, (*chIt).switchOn);
+
+                    // Only enable outputs when preconditions are met; disabling is always okay.
+                    if(irrigOk || !(*chIt).switchOn) {
+                        outputCtrl.setOutput((OutputController::ch_map_t) (*chIt).chNum, (*chIt).switchOn);
+                    }
                 }
 
                 lastIrrigEvent = nextIrrigEvent;
@@ -316,7 +343,10 @@ void IrrigationController::publishStateUpdate(void)
             localtime_r(&nextIrrigEvent, &nextIrrigEventTm);
             strftime(timeStr, 20, "%Y-%m-%d %H:%M:%S", &nextIrrigEventTm);
 
-            size_t actualLen = snprintf(mqttStateData, mqttStateDataMaxLen, mqttStateDataFmt, state.battVoltage, state.fillLevel, timeStr);
+            size_t actualLen = snprintf(mqttStateData, mqttStateDataMaxLen, mqttStateDataFmt,
+                state.battVoltage, state.battState, BATT_STATE_TO_STR(state.battState), 
+                state.fillLevel, state.reservoirState, RESERVOIR_STATE_TO_STR(state.reservoirState),
+                timeStr);
             mqttMgr.publish(mqttStateTopic, mqttStateData, actualLen, MqttManager::QOS_EXACTLY_ONCE, false);
         }
     }
