@@ -57,8 +57,8 @@ private:
 
     const int wakeupIntervalMillis = 10000;                 /**< Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
     const int wakeupIntervalKeepAwakeMillis = 5000;         /**< Processing task wakeup time in milliseconds when keepawake is active */
-    const int eventComingUpRangeMillis = 60000;             /**< If an event is this close, don't go to deep sleep, but stay in a tight polling loop */
-    const int tightPollMillis = 250;                        /**< Polling interval when in close range to an event */
+    const int noDeepSleepRangeMillis = 60000;               /**< If an event is this close, don't go to deep sleep */
+    const int preEventMillis = 500;                         /**< Time in milliseconds to wakeup before an event */
 
     state_t state;                                          /**< Internal state representation */
 
@@ -83,6 +83,12 @@ private:
 
     static void taskFunc(void* params);
     void publishStateUpdate(void);
+
+    static void timeSytemEventsHookDispatch(void* param, time_system_event_t event);
+    void timeSytemEventTimeSet(void);
+
+    EventGroupHandle_t timeEvents;
+    const int timeEventTimeSet = (1<<0);
 
 public:
     IrrigationController(void);
