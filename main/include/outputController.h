@@ -40,6 +40,7 @@ public:
 
     bool anyOutputsActive(void);
     err_t setOutput(ch_map_t outputNum, bool switchOn);
+    void disableAllOutputs(void);
 
 private:
     const char* logTag = "out_ctrl";

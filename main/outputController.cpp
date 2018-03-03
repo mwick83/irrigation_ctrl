@@ -31,6 +31,15 @@ bool OutputController::anyOutputsActive(void)
     return (activeIntChannelMap != 0U);
 }
 
+/**
+ * @brief Set an output channel to the desired value.
+ * 
+ * @param outputNum The output channel to be switched
+ * @param switchOn Wether or not to switch the output on
+ * @return OutputController::err_t
+ * @retval ERR_OK Success.
+ * @retval ERR_INVALID_PARAM outputNum has an invalid value.
+ */
 OutputController::err_t OutputController::setOutput(ch_map_t outputNum, bool switchOn)
 {
     err_t ret = ERR_OK;
@@ -56,4 +65,15 @@ OutputController::err_t OutputController::setOutput(ch_map_t outputNum, bool swi
     }
 
     return ret;
+}
+
+/**
+ * @brief Disable all outputs at once.
+ * 
+ */
+void OutputController::disableAllOutputs(void)
+{
+    for(int outputNum = 0; outputNum < (sizeof(intChannelMap) / sizeof(intChannelMap[0])); outputNum++) {
+        setOutput((ch_map_t) outputNum, false);
+    }
 }
