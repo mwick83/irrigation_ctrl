@@ -75,6 +75,27 @@ uint32_t PowerManager::getSupplyVoltageMilli(void)
     return ((uint32_t)((result)+0.5));
 }
 
+/**
+ * @brief Get the battery state from the measured battery voltage.
+ * 
+ * @param millis Battery voltage in mV.
+ * @return PowerManager::batt_state_t
+ */
+PowerManager::batt_state_t PowerManager::getBatteryState(uint32_t millis)
+{
+    batt_state_t state = BATT_CRITICAL;
+
+    if(millis >= battOkThresholdMilli) {
+        state = BATT_FULL;
+    } else if(millis >= battLowThresholdMilli) {
+        state = BATT_OK;
+    } else if(millis >= battCriticalThresholdMilli) {
+        state = BATT_LOW;
+    }
+
+    return state;
+}
+
 void PowerManager::setPeripheralEnable(bool en)
 {
     if(pdTRUE == xSemaphoreTake(peripheralEnMutex, portMAX_DELAY)) {

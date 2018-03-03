@@ -19,6 +19,14 @@
 
 #include "user_config.h"
 
+#define BATT_STATE_TO_STR(state) (\
+    (state == PowerManager::BATT_FULL) ? "FULL" : \
+    (state == PowerManager::BATT_OK) ? "OK" : \
+    (state == PowerManager::BATT_LOW) ? "LOW" : \
+    (state == PowerManager::BATT_CRITICAL) ? "CRITICAL" : \
+    "UNKOWN" \
+)
+
 class PowerManager
 {
 private:
@@ -41,9 +49,17 @@ private:
     bool keepAwakeAtBootState;
 
 public:
+    typedef enum {
+        BATT_FULL = 0,
+        BATT_OK = 1,
+        BATT_LOW = 2,
+        BATT_CRITICAL = 3,
+    } batt_state_t;
+
     PowerManager(void);
 
     uint32_t getSupplyVoltageMilli(void);
+    batt_state_t getBatteryState(uint32_t millis);
 
     void setPeripheralEnable(bool en);
     bool getPeripheralEnable(void);
