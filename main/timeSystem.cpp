@@ -31,10 +31,9 @@ static StaticTask_t sntpTaskBuf;
 static TaskHandle_t sntpTaskHandle;
 void sntp_task(void* params);
 
-typedef void(*TimeSystem_TimeSetFncPtr)(void*);
-std::vector<TimeSystem_TimeSetFncPtr> TimeSystem_TimeSetHooks;
-std::vector<void*> TimeSystem_TimeSetHookParamPtrs;
-void TimeSystem_CallTimeSetHooks(void);
+std::vector<TimeSystem_HookFncPtr> TimeSystem_Hooks;
+std::vector<void*> TimeSystem_HookParamPtrs;
+static void TimeSystem_CallHooks(time_system_event_t event);
 
 // ********************************************************************
 // time system initialization
@@ -45,8 +44,8 @@ extern "C" void TimeSystem_Init(void)
     struct tm timeinfo;
 
     timeEvents = xEventGroupCreate();
-    TimeSystem_TimeSetHooks.clear();
-    TimeSystem_TimeSetHookParamPtrs.clear();
+    TimeSystem_Hooks.clear();
+    TimeSystem_HookParamPtrs.clear();
 
     ESP_LOGI(LOG_TAG_TIME, "Checking if time is already set.");
     time(&now);
@@ -60,6 +59,7 @@ extern "C" void TimeSystem_Init(void)
     if(!(timeinfo.tm_year < (2017 - 1900))) {
         ESP_LOGI(LOG_TAG_TIME, "-> Time already set. Setting timeEvents.");
         xEventGroupSetBits(timeEvents, timeEventTimeSet);
+        TimeSystem_CallHooks(TIMESYSTEM_TIME_SET);
         TimeSystem_LogTime();
     } else {
         ESP_LOGI(LOG_TAG_TIME, "-> Time not set.");
@@ -120,7 +120,7 @@ extern "C" int TimeSystem_SetTime(int16_t day, int16_t month, int16_t year, int1
     if(0 == result) {
         ESP_LOGI(LOG_TAG_TIME, "Time set. Setting timeEvents.");
         xEventGroupSetBits(timeEvents, timeEventTimeSet);
-        TimeSystem_CallTimeSetHooks();
+        TimeSystem_CallHooks(TIMESYSTEM_TIME_SET);
         TimeSystem_LogTime();
     } else {
         ESP_LOGE(LOG_TAG_TIME, "settimeofday failed with exit code %d.", result);
@@ -132,23 +132,23 @@ extern "C" int TimeSystem_SetTime(int16_t day, int16_t month, int16_t year, int1
 // ********************************************************************
 // TimeSet hook handling
 // ********************************************************************
-void TimeSystem_CallTimeSetHooks(void)
+void TimeSystem_CallHooks(time_system_event_t event)
 {
-    int numHooks = TimeSystem_TimeSetHooks.size();
-    int numParams = TimeSystem_TimeSetHookParamPtrs.size();
+    int numHooks = TimeSystem_Hooks.size();
+    int numParams = TimeSystem_HookParamPtrs.size();
     if(numParams < numHooks) numHooks = numParams;
 
     for(int i = 0; i < numHooks; i++) {
-        TimeSystem_TimeSetHooks[i](TimeSystem_TimeSetHookParamPtrs[i]);
+        TimeSystem_Hooks[i](TimeSystem_HookParamPtrs[i], event);
     }
 }
 
-void TimeSystem_RegisterTimeSetHook(TimeSystem_TimeSetFncPtr hook, void* param)
+void TimeSystem_RegisterHook(TimeSystem_HookFncPtr hook, void* param)
 {
     // TBD: looking for multi-threading
 
-    TimeSystem_TimeSetHooks.push_back(hook);
-    TimeSystem_TimeSetHookParamPtrs.push_back(param);
+    TimeSystem_Hooks.push_back(hook);
+    TimeSystem_HookParamPtrs.push_back(param);
 }
 
 // ********************************************************************
@@ -216,7 +216,7 @@ void sntp_task(void* params)
         if(0 != (xEventGroupGetBits(timeEvents) & timeEventTimeSet)) {
             ESP_LOGI(LOG_TAG_TIME, "Time set. Setting timeEvents.");
             xEventGroupSetBits(timeEvents, timeEventTimeSet);
-            TimeSystem_CallTimeSetHooks();
+            TimeSystem_CallHooks(TIMESYSTEM_TIME_SET);
             TimeSystem_LogTime();
         }
 
