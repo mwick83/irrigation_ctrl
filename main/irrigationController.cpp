@@ -79,8 +79,8 @@ void IrrigationController::taskFunc(void* params)
         // Time hasen't been set within timeout, so assume something to get operating somehow.
         // After setting it here, it will be stored in the RTC, so next time we come up it
         // will not be set to the default again.
-        TimeSystem_SetTime(01, 01, 2018, 07, 00, 00);
-        ESP_LOGW(caller->logTag, "Time hasn't been set within timeout! Setting default time: 2018-01-01, 07:00:00.");
+        TimeSystem_SetTime(01, 01, 2018, 06, 00, 00);
+        ESP_LOGW(caller->logTag, "Time hasn't been set within timeout! Setting default time: 2018-01-01, 06:00:00.");
     } else {
         ESP_LOGD(caller->logTag, "Got time.");
     }
