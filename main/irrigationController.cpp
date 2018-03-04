@@ -110,16 +110,16 @@ void IrrigationController::taskFunc(void* params)
         if(!pwrMgr.getPeripheralEnable()) {
             ESP_LOGD(caller->logTag, "Bringing up DCDC + RS232 driver.");
             pwrMgr.setPeripheralEnable(true);
-            // Wait for stable DCDC: According to datasheet soft-start is 2.1ms
-            vTaskDelay(pdMS_TO_TICKS(5));
+            // Wait for stable onboard peripherals
+            vTaskDelay(pdMS_TO_TICKS(peripheralEnStartupMillis));
         }
 
         // Enable external sensor power
         if(!pwrMgr.getPeripheralExtSupply()) {
             ESP_LOGD(caller->logTag, "Powering external sensors.");
             pwrMgr.setPeripheralExtSupply(true);
-            // Wait a bit more for external sensors to power up properly
-            vTaskDelay(pdMS_TO_TICKS(100));
+            // Wait for external sensors to power up properly
+            vTaskDelay(pdMS_TO_TICKS(peripheralExtSupplyMillis));
         }
 
         // *********************

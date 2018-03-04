@@ -73,7 +73,8 @@ private:
     const int wakeupIntervalMillis = 10000;                 /**< Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
     const int wakeupIntervalKeepAwakeMillis = 5000;         /**< Processing task wakeup time in milliseconds when keepawake is active */
     const int noDeepSleepRangeMillis = 60000;               /**< If an event is this close, don't go to deep sleep */
-    const int preEventMillis = 500;                         /**< Time in milliseconds to wakeup before an event */
+    /** Time in milliseconds to wakeup before an event */
+    const int preEventMillis = peripheralEnStartupMillis + peripheralExtSupplyMillis + 50;
 
     state_t state;                                          /**< Internal state representation */
 
