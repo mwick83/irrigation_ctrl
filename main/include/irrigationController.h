@@ -23,6 +23,7 @@
     (state == IrrigationController::RESERVOIR_OK) ? "OK" : \
     (state == IrrigationController::RESERVOIR_LOW) ? "LOW" : \
     (state == IrrigationController::RESERVOIR_CRITICAL) ? "CRITICAL" : \
+    (state == IrrigationController::RESERVOIR_DISABLED) ? "DISABLED" : \
     "UNKOWN" \
 )
 
@@ -45,7 +46,8 @@ private:
     typedef enum {
         RESERVOIR_OK = 0,
         RESERVOIR_LOW = 1,
-        RESERVOIR_CRITICAL = 2
+        RESERVOIR_CRITICAL = 2,
+        RESERVOIR_DISABLED = 3
     } reservoir_state_t;
 
     /** Internal state structure used for MQTT updates and persistant storage. */
@@ -76,6 +78,9 @@ private:
     /** Time in milliseconds to wakeup before an event */
     const int preEventMillis = peripheralEnStartupMillis + peripheralExtSupplyMillis + 50;
 
+    const bool disableReservoirCheck = true;                /**< Can be set to disable the reservoir check when irrigating */ // TBD: from config
+    const bool disableBatteryCheck = false;                 /**< Can be set to disable the battery check when irrigating */ // TBD: from config
+
     state_t state;                                          /**< Internal state representation */
 
     // MQTT related state/data
@@ -86,10 +91,10 @@ private:
     /** MQTT state update data format.
      * Needed format specifiers (in this order!): 
      * - \%u Battery voltage in mV,
-     * - \%u Battery state (0..3),
+     * - \%u Battery state (0..4),
      * - \%s Battery state string representation,
      * - \%d Reservoir fill level (multiplied by 10),
-     * - \%u Reservoir state (0..2),
+     * - \%u Reservoir state (0..3),
      * - \%s Reservoir state string representation,
      * - \%s Next irrigation event occurance ('YYYY-MM-DD HH:MM:SS')
      */

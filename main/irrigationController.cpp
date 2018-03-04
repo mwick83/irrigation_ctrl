@@ -61,6 +61,7 @@ void IrrigationController::taskFunc(void* params)
     EventBits_t events;
     TickType_t wait, loopStartTicks;
     time_t now, nextIrrigEvent, lastIrrigEvent;
+    bool irrigOk;
 
     // Wait for WiFi to come up. TBD: make configurable (globally), implement WiFiManager for that
     wait = portMAX_DELAY;
@@ -115,7 +116,7 @@ void IrrigationController::taskFunc(void* params)
         }
 
         // Enable external sensor power
-        if(!pwrMgr.getPeripheralExtSupply()) {
+        if((!caller->disableReservoirCheck) && (!pwrMgr.getPeripheralExtSupply())) {
             ESP_LOGD(caller->logTag, "Powering external sensors.");
             pwrMgr.setPeripheralExtSupply(true);
             // Wait for external sensors to power up properly
@@ -127,28 +128,48 @@ void IrrigationController::taskFunc(void* params)
         // *********************
         // Battery voltage
         caller->state.battVoltage = pwrMgr.getSupplyVoltageMilli();
-        caller->state.battState = pwrMgr.getBatteryState(caller->state.battVoltage);
-        ESP_LOGD(caller->logTag, "Batt voltage: %02.2f V (%s)", roundf(caller->state.battVoltage * 0.1f) * 0.01f,
+        if(caller->disableBatteryCheck) {
+            caller->state.battState = PowerManager::BATT_DISABLED;
+        } else {
+            caller->state.battState = pwrMgr.getBatteryState(caller->state.battVoltage);
+        }
+        ESP_LOGD(caller->logTag, "Battery voltage: %02.2f V (%s)", roundf(caller->state.battVoltage * 0.1f) * 0.01f,
             BATT_STATE_TO_STR(caller->state.battState));
 
-        // Fill level of the reservoir
-        caller->state.fillLevel = fillSensor.getFillLevel();
-        if(caller->state.fillLevel >= fillLevelLowThreshold) {
-            caller->state.reservoirState = RESERVOIR_OK;
-        } else if (caller->state.fillLevel >= fillLevelCriticalThreshold) {
-            caller->state.reservoirState = RESERVOIR_LOW;
+        // Get fill level of the reservoir, if not disabled.
+        if(!caller->disableReservoirCheck) {
+            caller->state.fillLevel = fillSensor.getFillLevel();
+            if(caller->state.fillLevel >= fillLevelLowThreshold) {
+                caller->state.reservoirState = RESERVOIR_OK;
+            } else if (caller->state.fillLevel >= fillLevelCriticalThreshold) {
+                caller->state.reservoirState = RESERVOIR_LOW;
+            } else {
+                caller->state.reservoirState = RESERVOIR_CRITICAL;
+            }
         } else {
-            caller->state.reservoirState = RESERVOIR_CRITICAL;
+            caller->state.fillLevel = -2;
+            caller->state.reservoirState = RESERVOIR_DISABLED;
         }
-        ESP_LOGD(caller->logTag, "Fill level: %d (%s)", caller->state.fillLevel, 
+        ESP_LOGD(caller->logTag, "Reservoir fill level: %d (%s)", caller->state.fillLevel, 
             RESERVOIR_STATE_TO_STR(caller->state.reservoirState));
 
         // Power down external supply already. Not needed anymore.
-        pwrMgr.setPeripheralExtSupply(false);
-        ESP_LOGD(caller->logTag, "Sensors powered down.");
+        if(pwrMgr.getPeripheralExtSupply()) {
+            pwrMgr.setPeripheralExtSupply(false);
+            ESP_LOGD(caller->logTag, "Sensors powered down.");
+        }
 
         // TBD: Get weather forecast
         // TBD: Get local weather data
+
+        // Check system preconditions for the irrigation, i.e. battery state and reservoir fill level
+        irrigOk = true;
+        if(caller->state.battState == PowerManager::BATT_CRITICAL) {
+            irrigOk = false;
+        }
+        if(caller->state.reservoirState == RESERVOIR_CRITICAL) {
+            irrigOk = false;
+        }
 
         // *********************
         // Irrigation
@@ -186,15 +207,8 @@ void IrrigationController::taskFunc(void* params)
             if((nextIrrigEvent != 0) && ((fabs(diffTime) < 1.0) || (diffTime <= -1.0))) {
                 TimeSystem_LogTime();
 
-                // Check preconditions for the irrigation, i.e. battery state and reservoir fill level
-                bool irrigOk = true;
-                if(caller->state.battState == PowerManager::BATT_CRITICAL) {
-                    ESP_LOGE(caller->logTag, "Battery state is critical! Dropping irrigation.");
-                    irrigOk = false;
-                }
-                if(caller->state.reservoirState == RESERVOIR_CRITICAL) {
-                    ESP_LOGE(caller->logTag, "Reservoir fill level is critical! Dropping irrigation.");
-                    irrigOk = false;
+                if(!irrigOk) {
+                    ESP_LOGE(caller->logTag, "Critical system conditions detected! Dropping irrigation.");
                 }
 
                 struct tm eventTm;
@@ -206,7 +220,7 @@ void IrrigationController::taskFunc(void* params)
                 std::vector<IrrigationEvent::ch_cfg_t> chCfg;
                 irrigPlanner.getEventChannelConfig(nextIrrigEvent, &chCfg);
                 for(std::vector<IrrigationEvent::ch_cfg_t>::iterator chIt = chCfg.begin(); chIt != chCfg.end(); chIt++) {
-                    ESP_LOGI(caller->logTag, "  * Channel: %s, state: %s", 
+                    ESP_LOGI(caller->logTag, "* Channel: %s, state: %s", 
                         CH_MAP_TO_STR((*chIt).chNum), (*chIt).switchOn ? "ON" : "OFF");
 
                     // Only enable outputs when preconditions are met; disabling is always okay.

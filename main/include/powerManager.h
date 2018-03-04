@@ -24,6 +24,7 @@
     (state == PowerManager::BATT_OK) ? "OK" : \
     (state == PowerManager::BATT_LOW) ? "LOW" : \
     (state == PowerManager::BATT_CRITICAL) ? "CRITICAL" : \
+    (state == PowerManager::BATT_DISABLED) ? "DISABLED" : \
     "UNKOWN" \
 )
 
@@ -54,6 +55,7 @@ public:
         BATT_OK = 1,
         BATT_LOW = 2,
         BATT_CRITICAL = 3,
+        BATT_DISABLED = 4
     } batt_state_t;
 
     PowerManager(void);
