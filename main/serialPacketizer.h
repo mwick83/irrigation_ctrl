@@ -109,6 +109,11 @@ private:
                             continueProcessing = false;
                         }
                     }
+                } else if(uart_event.type == UART_BREAK) {
+                    // Break events (may) come in when the connected device powers up.
+                    // We are not using break signaling for anything at all, so just drop them
+                    // with a debug log.
+                    ESP_LOGD(caller->logTag, "Unhandled UART break event reveived.");
                 } else {
                     ESP_LOGW(caller->logTag, "Unhandled UART event reveived: type = %d", (uint32_t) uart_event.type);
                 }
