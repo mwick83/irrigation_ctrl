@@ -9,6 +9,8 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "esp_log.h"
+
 #include "driver/gpio.h"
 
 #include "consoleCommands.h"
@@ -30,6 +32,8 @@ static eCommandResult_T ConsoleCommandIoGet(const char buffer[]);
 static eCommandResult_T ConsoleCommandTimeGet(const char buffer[]);
 static eCommandResult_T ConsoleCommandTimeSet(const char buffer[]);
 static eCommandResult_T ConsoleCommandTimeSntp(const char buffer[]);
+static eCommandResult_T ConsoleCommandLog(const char buffer[]);
+static eCommandResult_T ConsoleCommandLogLevel(const char buffer[]);
 
 static const sConsoleCommandTable_T mConsoleCommandTable[] =
 {
@@ -44,6 +48,9 @@ static const sConsoleCommandTable_T mConsoleCommandTable[] =
     {"time_get", &ConsoleCommandTimeGet, HELP("Get the current time.")},
     {"time_set", &ConsoleCommandTimeSet, HELP("Set the current time. Format: DD MM YYYY HH MM SS")},
     {"time_sntp", &ConsoleCommandTimeSntp, HELP("(Re-)request time from SNTP server.")},
+
+    {"log", &ConsoleCommandLog, HELP("Set logging on/off. Param: 0:off,1:on")},
+    {"log_level", &ConsoleCommandLogLevel, HELP("Set log level. Param: 0:NONE,1:ERR,2:WARN,3:INFO,4:DEBUG,5:DFLT")},
 
     {"exit", &ConsoleExit, HELP("Exits the command console.")},
     CONSOLE_COMMAND_TABLE_END // must be LAST
@@ -224,6 +231,66 @@ static eCommandResult_T ConsoleCommandTimeSntp(const char buffer[])
     TimeSystem_SntpRequest();
 
     ConsoleIoSendString("Get time via SNTP requested.");
+    ConsoleIoSendString(STR_ENDLINE);
+
+    return result;
+}
+
+static eCommandResult_T ConsoleCommandLog(const char buffer[])
+{
+    eCommandResult_T result = COMMAND_SUCCESS;
+    int16_t onOff;
+
+    result = ConsoleReceiveParamInt16(buffer, 1, &onOff);
+    if((onOff < 0) || (onOff > 1)) result = COMMAND_PARAMETER_ERROR;
+
+    if(COMMAND_SUCCESS == result) {
+        if(onOff == 0) {
+            esp_log_level_set("*", ESP_LOG_WARN);
+            ConsoleIoSendString("Logging disabled, i.e. set to WARN.");
+        } else {
+            esp_log_level_set("*", (esp_log_level_t) CONFIG_LOG_DEFAULT_LEVEL);
+            ConsoleIoSendString("Default log level set.");
+        }
+    }
+
+    if(COMMAND_SUCCESS != result) {
+        ConsoleIoSendString("Error parsing parameters.");
+    }
+    ConsoleIoSendString(STR_ENDLINE);
+
+    return result;
+}
+
+static eCommandResult_T ConsoleCommandLogLevel(const char buffer[])
+{
+    eCommandResult_T result = COMMAND_SUCCESS;
+    int16_t level;
+    static char outStr[20];
+
+    result = ConsoleReceiveParamInt16(buffer, 1, &level);
+    if((level < 0) || (level > 5)) result = COMMAND_PARAMETER_ERROR;
+
+    if(COMMAND_SUCCESS == result) {
+        esp_log_level_t setLevel;
+        switch(level) {
+            case 0:  setLevel = ESP_LOG_NONE; break;
+            case 1:  setLevel = ESP_LOG_ERROR; break;
+            case 2:  setLevel = ESP_LOG_WARN; break;
+            case 3:  setLevel = ESP_LOG_INFO; break;
+            case 4:  setLevel = ESP_LOG_DEBUG; break;
+            default: setLevel = (esp_log_level_t) CONFIG_LOG_DEFAULT_LEVEL; break;
+        }
+
+        esp_log_level_set("*", setLevel);
+    }
+
+    if(COMMAND_SUCCESS == result) {
+        snprintf(outStr, sizeof(outStr) / sizeof(outStr[0]), "Log level set to %d.", level);
+        ConsoleIoSendString(outStr);
+    } else {
+        ConsoleIoSendString("Error parsing parameters.");
+    }
     ConsoleIoSendString(STR_ENDLINE);
 
     return result;
