@@ -171,6 +171,12 @@ void IrrigationController::taskFunc(void* params)
             irrigOk = false;
         }
 
+        // Check if system conditions got critical and outputs are active
+        if(outputCtrl.anyOutputsActive() && !irrigOk) {
+            ESP_LOGW(caller->logTag, "Active outputs detected, but system conditions critical! Disabling them for safety.");
+            outputCtrl.disableAllOutputs();
+        }
+
         // *********************
         // Irrigation
         // *********************
