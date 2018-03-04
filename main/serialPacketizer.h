@@ -40,6 +40,7 @@ private:
     const char postamble[2] = {0x55, 0xaa};
     static const int postambleLen = sizeof(postamble) / sizeof(postamble[0]);
 
+    const unsigned int rxDriverQueueSize = 32;
     QueueHandle_t rxDriverQueue;
 
     static const BaseType_t queueWaitTime = pdMS_TO_TICKS(50);
@@ -87,15 +88,26 @@ private:
             if(activeQueue == caller->rxDriverQueue) {
                 xQueueReceive(activeQueue, &uart_event, portMAX_DELAY); // no blocking, because select ensures it is available
                 if(uart_event.type == UART_DATA) {
-                    stat = caller->handleRxData();
-                    if(stat < 0) {
-                        ESP_LOGW(caller->logTag, "handleRxData returned error code %d", stat);
-                    } else {
-                        if(errQUEUE_FULL == xQueueSendToBack(caller->rxPacketQueue, &(caller->rxBuffer), queueWaitTime)) {
-                            ESP_LOGW(caller->logTag, "Received packet couldn't be queued within timeout. Dropping it.")
+                    bool continueProcessing = true;
+                    while(continueProcessing) {
+                        stat = caller->handleRxData();
+                        if(stat < 0) {
+                            ESP_LOGW(caller->logTag, "handleRxData returned error code %d", stat);
+                            continueProcessing = false;
+                        } else if(stat > 0) {
+                            if(errQUEUE_FULL == xQueueSendToBack(caller->rxPacketQueue, &(caller->rxBuffer), queueWaitTime)) {
+                                ESP_LOGW(caller->logTag, "Received packet couldn't be queued within timeout. Dropping it.")
+                            }
+                            memset(caller->rxBuffer.data, 0x00, maxPayloadLen);
+                            caller->rxBuffer.len = -1;
+                        } else {
+                            // Status zero means there is nothing more to process currently. 
+                            // In consequence this means empty packets will be dropped, which is okay.
+                            if(caller->rxBuffer.len == 0) {
+                                caller->rxBuffer.len = -1;
+                            }
+                            continueProcessing = false;
                         }
-                        memset(caller->rxBuffer.data, 0x00, maxPayloadLen);
-                        caller->rxBuffer.len = -1;
                     }
                 } else {
                     ESP_LOGW(caller->logTag, "Unhandled UART event reveived: type = %d", (uint32_t) uart_event.type);
@@ -116,7 +128,7 @@ private:
 
     int handleRxData(void)
     {
-        int ret = -1;
+        int ret = 0;
 
         size_t charsAvail;
         int readStat;
@@ -131,7 +143,9 @@ private:
             readStat = uart_read_bytes(portNum, &curChar, 1, 1);
             if(1 != readStat) {
                 ESP_LOGW(logTag, "Reading UART byte failed with status %d.", readStat);
+                ret = -1;
             } else {
+                //ESP_LOGD(logTag, "UART byte received: 0x%02x ('%c').", curChar, curChar);
                 charsAvail--;
 
                 switch(state) {
@@ -152,6 +166,7 @@ private:
                                 state = RX_FSM_STATE_IDLE;
                                 ESP_LOGW(logTag, "Invalid preamble byte received.");
                                 // TBD: return distinctive error code
+                                ret = -1;
                             }
                         } else {
                             // length
@@ -166,9 +181,11 @@ private:
                                 if(curChar > maxPayloadLen) {
                                     ESP_LOGW(logTag, "Receiving packet length (%d) is too big. Packet will be dropped.", curChar);
                                     // TBD: return distinctive error code
+                                    ret = -1;
                                 } else {
                                     ESP_LOGE(logTag, "Receive buffer is not free. This can't happen!");
                                     // TBD: return distinctive error code
+                                    ret = -1;
                                 }
                             }
 
@@ -200,6 +217,9 @@ private:
                                 cnt = 0;
                                 if(rxEn) {
                                     ret = rxBuffer.len;
+                                    // Override charsAvail to break out of the loop; next packet will be processed
+                                    // later.
+                                    charsAvail = 0;
                                     break;
                                 }
                             }
@@ -211,6 +231,7 @@ private:
                             }
                             ESP_LOGW(logTag, "Invalid postamble byte received.");
                             // TBD: return distinctive error code
+                            ret = -1;
                         }
                         break;
 
@@ -219,6 +240,7 @@ private:
                         cnt = 0;
                         ESP_LOGE(logTag, "RX_FSM in invalid state!");
                         // TBD: return distinctive error code
+                        ret = -1;
                         break;
                 }
             }
@@ -279,12 +301,12 @@ public:
 
         ESP_ERROR_CHECK(uart_param_config(portNum, &cfg));
         ESP_ERROR_CHECK(uart_set_pin(portNum, txPin, rxPin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-        ESP_ERROR_CHECK(uart_driver_install(portNum, uartRxBufferSize, uartTxBufferSize, 4, &rxDriverQueue, 0));
+        ESP_ERROR_CHECK(uart_driver_install(portNum, uartRxBufferSize, uartTxBufferSize, rxDriverQueueSize, &rxDriverQueue, 0));
 
         rxPacketQueue = xQueueCreateStatic(numRxBuffers, sizeof(BUFFER_T), rxPacketQueueStorageBuf, &rxPacketQueueBuf);
         txPacketQueue = xQueueCreateStatic(numTxBuffers, sizeof(BUFFER_T), txPacketQueueStorageBuf, &txPacketQueueBuf);
 
-        procQueueSet = xQueueCreateSet(numRxBuffers+numTxBuffers);
+        procQueueSet = xQueueCreateSet(rxDriverQueueSize+numTxBuffers);
         if(pdPASS != xQueueAddToSet(rxDriverQueue, procQueueSet)) {
             ESP_LOGE(logTag, "rxDriverQueue couldn't be added to processing queue set!")
         }
