@@ -37,8 +37,9 @@ private:
     StaticSemaphore_t requestMutexBuf;
 
     enum {
-        PROTO_TYPE_FILL_LEVEL_REQ = 0x01,
-        PROTO_TYPE_FILL_LEVEL_IND = 0x81
+        PROTO_TYPE_FILL_LEVEL_REQ       = 0x01,
+        PROTO_TYPE_FILL_LEVEL_IND       = 0x81,
+        PROTO_TYPE_FILL_LEVEL_RAW_IND   = 0x82
     } PROTO_TYPE_E;
 
 public:
@@ -76,7 +77,10 @@ public:
         int fillLevel = -1;
 
         //TickType_t wait = portMAX_DELAY;
-        TickType_t wait = pdMS_TO_TICKS(500);
+        // Note: The timeout is devided into multiple polls, because the fill sensor
+        // may send multiple answer packet (i.e. raw value and the actual percentage)
+        TickType_t wait = pdMS_TO_TICKS(100);
+        int polls = 5;
 
         if(!packetizerInitialized) return -1;
 
@@ -85,15 +89,26 @@ public:
             txBuffer[0] = PROTO_TYPE_FILL_LEVEL_REQ;
 
             if(0 == packetizer->transmitData(1, txBuffer, wait)) {
-                if(pdPASS == xQueueReceive(rxPacketQueue, &rxPacketBuf, wait)) {
-                    if((rxPacketBuf.len == 5) && (PROTO_TYPE_FILL_LEVEL_IND == rxPacketBuf.data[0])) {
-                        memcpy(&fillLevel, &rxPacketBuf.data[1], 4);
-                        ret = fillLevel;
-                    } else {
-                        ESP_LOGE(logTag, "Received answer isn't a proper fill level indication! len: %d, type: 0x%02x", rxPacketBuf.len, rxPacketBuf.data[0]);
-                        // TBD: distinctive error code
+                while(polls >= 0) {
+                    if(pdPASS == xQueueReceive(rxPacketQueue, &rxPacketBuf, wait)) {
+                        if((rxPacketBuf.len == 5) && (PROTO_TYPE_FILL_LEVEL_IND == rxPacketBuf.data[0])) {
+                            memcpy(&fillLevel, &rxPacketBuf.data[1], 4);
+                            ret = fillLevel;
+                            break;
+                        } else if((rxPacketBuf.len == 5) && (PROTO_TYPE_FILL_LEVEL_RAW_IND == rxPacketBuf.data[0])) {
+                            uint32_t rawData;
+                            memcpy(&rawData, &rxPacketBuf.data[1], 4);
+                            ESP_LOGD(logTag, "Received answer is raw fill level. raw: 0x%08x (%d)", rawData, rawData);
+                        } else {
+                            ESP_LOGE(logTag, "Received answer isn't a proper fill level indication! len: %d, type: 0x%02x", rxPacketBuf.len, rxPacketBuf.data[0]);
+                            // TBD: distinctive error code
+                            break;
+                        }
                     }
-                } else {
+                    polls--;
+                }
+
+                if(polls < 0) {
                     ESP_LOGE(logTag, "Receiving fill level timed out!");
                     // TBD: distinctive error code
                 }
