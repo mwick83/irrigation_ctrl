@@ -46,18 +46,18 @@ OutputController::err_t OutputController::setOutput(ch_map_t outputNum, bool swi
 
     if(outputNum >= NUM_CHANNELS) return ERR_INVALID_PARAM;
 
-    if(outputNum < (sizeof(intChannelMap) / sizeof(intChannelMap[0]))) {
+    if((outputNum >= intChannelMin) && (outputNum <= intChannelMax)) {
         ESP_LOGD(logTag, "Switching output %d (%s; GPIO %d) %s", outputNum, CH_MAP_TO_STR(outputNum),
                     intChannelMap[outputNum], switchOn ? "ON" : "OFF");
-        gpio_set_level(intChannelMap[outputNum], switchOn ? 1U : 0U);
+        gpio_set_level(intChannelMap[outputNum-intChannelMin], switchOn ? 1U : 0U);
 
-        uint32_t mapMask = 1U << outputNum;
+        uint32_t mapMask = 1U << (outputNum-intChannelMin);
         if(switchOn) {
             activeIntChannelMap |= mapMask;
         } else {
             activeIntChannelMap &= ~mapMask;
         }
-    } else if(outputNum <= CH_EXT0) {
+    } else if((outputNum >= extChannelMin) && (outputNum <= extChannelMax)) {
         ESP_LOGW(logTag, "External outputs not yet supported.");
         ret = ERR_INVALID_PARAM;
     } else {
@@ -73,7 +73,7 @@ OutputController::err_t OutputController::setOutput(ch_map_t outputNum, bool swi
  */
 void OutputController::disableAllOutputs(void)
 {
-    for(int outputNum = 0; outputNum < (sizeof(intChannelMap) / sizeof(intChannelMap[0])); outputNum++) {
+    for(int outputNum = intChannelMin; outputNum < intChannelMax; outputNum++) {
         setOutput((ch_map_t) outputNum, false);
     }
 }

@@ -30,6 +30,13 @@ public:
         NUM_CHANNELS
     } ch_map_t;
 
+    static const unsigned int intChannels = CH_AUX1 - CH_MAIN + 1;
+    static const unsigned int intChannelMin = CH_MAIN;
+    static const unsigned int intChannelMax = CH_AUX1;
+    static const unsigned int extChannels = 0;
+    static const unsigned int extChannelMin = CH_EXT0;
+    static const unsigned int extChannelMax = CH_EXT0;
+
     typedef enum {
         ERR_OK = 0,
         ERR_INVALID_PARAM = -1,
@@ -46,7 +53,7 @@ private:
     const char* logTag = "out_ctrl";
 
     /** Lookup table to map channel numbers to GPIO number. Doesn't include external channels. */
-    const gpio_num_t intChannelMap[CH_AUX1+1] = {
+    const gpio_num_t intChannelMap[intChannels] = {
         irrigationMainGpioNum,
         irrigationAux0GpioNum,
         irrigationAux1GpioNum
