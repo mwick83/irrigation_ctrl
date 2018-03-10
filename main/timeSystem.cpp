@@ -56,7 +56,7 @@ extern "C" void TimeSystem_Init(void)
     time(&now);
 
     // set correct timezone
-    setenv("TZ", "CET-1CEST", 1);
+    setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
     tzset();
     localtime_r(&now, &timeinfo);
 
