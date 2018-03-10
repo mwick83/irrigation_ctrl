@@ -73,7 +73,7 @@ OutputController::err_t OutputController::setOutput(ch_map_t outputNum, bool swi
  */
 void OutputController::disableAllOutputs(void)
 {
-    for(int outputNum = intChannelMin; outputNum < intChannelMax; outputNum++) {
+    for(int outputNum = intChannelMin; outputNum <= intChannelMax; outputNum++) {
         setOutput((ch_map_t) outputNum, false);
     }
 }
