@@ -52,13 +52,14 @@ private:
 
     /** Internal state structure used for MQTT updates and persistant storage. */
     typedef struct {
-        int32_t fillLevel;                                  /**< Fill level of reservoir in percent multiplied by 10.
-                                                             * Note: Will be -1 if getting the fill level failed.
-                                                             */
-        reservoir_state_t reservoirState;                   /**< State of the reservoir (e.g. RESERVOIR_OK, ...) */
-        uint32_t battVoltage;                               /**< External battery supply voltage in mV. */
-        PowerManager::batt_state_t battState;               /**< State of the battery (e.g. BATT_FULL, BATT_OK, ...) */
-        time_t nextIrrigEvent;                              /**< Next time an irrigation event occurs. */
+        int32_t fillLevel;                                      /**< Fill level of reservoir in percent multiplied by 10.
+                                                                 * Note: Will be -1 if getting the fill level failed.
+                                                                 */
+        reservoir_state_t reservoirState;                       /**< State of the reservoir (e.g. RESERVOIR_OK, ...) */
+        uint32_t battVoltage;                                   /**< External battery supply voltage in mV. */
+        PowerManager::batt_state_t battState;                   /**< State of the battery (e.g. BATT_FULL, BATT_OK, ...) */
+        time_t nextIrrigEvent;                                  /**< Next time an irrigation event occurs. */
+        std::vector<uint32_t> activeOutputs;  /**< Currently active outputs. */
     } state_t;
 
     static const int taskStackSize = 2048;
@@ -89,7 +90,7 @@ private:
     const char* mqttStateTopicPost = "/state";              /**< MQTT topic postfix for state information (i.e. the part after the MAC address) */
 
     /** MQTT state update data format.
-     * Needed format specifiers (in this order!): 
+     * Needed format specifiers (in this order!):
      * - \%u Battery voltage in mV,
      * - \%u Battery state (0..4),
      * - \%s Battery state string representation,
@@ -97,11 +98,16 @@ private:
      * - \%u Reservoir state (0..3),
      * - \%s Reservoir state string representation,
      * - \%s Next irrigation event occurance ('YYYY-MM-DD HH:MM:SS')
+     * - \%s Active outputs array (list of unsigned integers)
+     * - \%s Active outputs array (list of names)
      */
     const char* mqttStateDataFmt = "{\n  \"batteryVoltage\": %u,\n  \"batteryState\": %u,\n"
         "  \"batteryStateStr\": \"%s\",\n"
         "  \"reservoirFillLevel\": %d,\n  \"reservoirState\": %u,\n  \"reservoirStateStr\": \"%s\",\n"
-        "  \"nextIrrigationEvent\": \"%s\"\n}";
+        "  \"activeOutputs\": [%s],\n"
+        "  \"activeOutputsStr\": [%s],\n"
+        "  \"nextIrrigationEvent\": \"%s\"\n"
+        "}";
     char* mqttStateTopic;                                   /**< @brief Buffer for the state topic. Will be allocated in constructor and freed in the destructor. */
     char* mqttStateData;                                    /**< @brief Buffer for the state data. Will be allocated in constructor and freed in the destructor. */
     /** Maximum allowed length of the state data.
@@ -109,10 +115,13 @@ private:
      * 1 digit for battery state, 8 digits for battery state string,
      * 4 digits for (fillLevel * 10), 1 digit for reservoir state,
      * 8 digits for reservoir state string,
+     * 2 digits per active output + ', ' as seperator
+     * 6 digits per active output string + ', ' as seperator
      * 19 digits for the next event datetime. */
     size_t mqttStateDataMaxLen;
 
     static void taskFunc(void* params);
+    void updateStateActiveOutputs(uint32_t chNum, bool active);
     void publishStateUpdate(void);
 
     static void timeSytemEventsHookDispatch(void* param, time_system_event_t event);

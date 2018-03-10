@@ -11,11 +11,19 @@ IrrigationController::IrrigationController(void)
     
     // Format string length + 5 digits voltage in mV + 1 digit batt state + 8 digits for battery state string +
     // 4 digits (fillLevel * 10) + 1 digit for reservoir state,
-    // 8 digits for reservoir state string, 
+    // 8 digits for reservoir state string,
+    // 2 digits per active output + ', ' as seperator
+    // 6 digits per active output string + ', ' as seperator
     // 19 digits for the next event datetime.
     // Format string is a bit too long, but don't care too mich about those few bytes
-    mqttStateDataMaxLen = strlen(mqttStateDataFmt) + 5 + 1 + 8 + 4 + 1 + 8 + 19 + 1;
+    mqttStateDataMaxLen = strlen(mqttStateDataFmt) + 5 + 1 + 8 + 4 + 1 + 8 + 
+        (4+8)*(OutputController::intChannels+OutputController::extChannels) + 
+        19 + 1;
     mqttStateData = (char*) calloc(mqttStateDataMaxLen, sizeof(char));
+
+    // Reserve space for active outputs
+    state.activeOutputs.clear();
+    state.activeOutputs.reserve(OutputController::intChannels+OutputController::extChannels);
 
     // Prepare time system event hook to react properly on time changes
     // Note: hook registration will be performed by the main thread, because the
@@ -203,8 +211,8 @@ void IrrigationController::taskFunc(void* params)
             caller->state.nextIrrigEvent = nextIrrigEvent;
             millisTillNextEvent = (int) round(difftime(nextIrrigEvent, now) * 1000.0);
 
-            // Publish state with the updated next event time
-            caller->publishStateUpdate();
+            // // Publish state with the updated next event time
+            // caller->publishStateUpdate();
 
             // Perform event actions if it is time now
             now = time(nullptr);
@@ -232,6 +240,7 @@ void IrrigationController::taskFunc(void* params)
                     // Only enable outputs when preconditions are met; disabling is always okay.
                     if(irrigOk || !(*chIt).switchOn) {
                         outputCtrl.setOutput((OutputController::ch_map_t) (*chIt).chNum, (*chIt).switchOn);
+                        caller->updateStateActiveOutputs((*chIt).chNum, (*chIt).switchOn);
                     }
                 }
 
@@ -239,6 +248,9 @@ void IrrigationController::taskFunc(void* params)
             } else {
                 eventsToProcess = false;
             }
+
+            // Publish state with the updated next event time + active outputs
+            caller->publishStateUpdate();
         }
 
         // *********************
@@ -329,12 +341,46 @@ void IrrigationController::taskFunc(void* params)
 }
 
 /**
+ * @brief Update active outputs list in internal state structure.
+ * 
+ * @param chNum Output channel to update
+ * @param active Wether or not the channel is now active.
+ */
+void IrrigationController::updateStateActiveOutputs(uint32_t chNum, bool active)
+{
+    bool inserted = false;
+    for(std::vector<uint32_t>::iterator it = state.activeOutputs.begin(); it != state.activeOutputs.end(); it++) {
+        if(!active) {
+            if(*it == chNum) {
+                state.activeOutputs.erase(it);
+                break;
+            }
+        } else {
+            if(*it > chNum) {
+                it = state.activeOutputs.insert(it, chNum);
+                inserted = true;
+                break;
+            } else if(*it == chNum) {
+                inserted = true;
+                break;
+            }
+        }
+    }
+
+    if(active && !inserted) {
+        state.activeOutputs.push_back(chNum);
+    }
+}
+
+/**
  * @brief Publish currently stored state via MQTT.
  */
 void IrrigationController::publishStateUpdate(void)
 {
     static uint8_t mac_addr[6];
     static char timeStr[20];
+    static char activeOutputs[4*(OutputController::intChannels+OutputController::extChannels)+1];
+    static char activeOutputsStr[8*(OutputController::intChannels+OutputController::extChannels)+1];
     size_t preLen;
     size_t postLen;
 
@@ -358,15 +404,28 @@ void IrrigationController::publishStateUpdate(void)
         }
 
         if(mqttPrepared) {
+            // Prepare next irrigation string
             time_t nextIrrigEvent = state.nextIrrigEvent;
             struct tm nextIrrigEventTm;
             localtime_r(&nextIrrigEvent, &nextIrrigEventTm);
             strftime(timeStr, 20, "%Y-%m-%d %H:%M:%S", &nextIrrigEventTm);
 
+            // Prepare active outputs strings
+            activeOutputs[0] = '\0';
+            activeOutputsStr[0] = '\0';
+            // TBD: make sure buffer is not exceeded!
+            for(std::vector<uint32_t>::iterator it = state.activeOutputs.begin(); it != state.activeOutputs.end(); it++) {
+                snprintf(activeOutputs, sizeof(activeOutputs) / sizeof(activeOutputs[0]),
+                    "%s%s%d", activeOutputs, (it==state.activeOutputs.begin()) ? "" : ", ", *it);
+                snprintf(activeOutputsStr, sizeof(activeOutputsStr) / sizeof(activeOutputsStr[0]),
+                    "%s%s\"%s\"", activeOutputsStr, (it==state.activeOutputs.begin()) ? "" : ", ", CH_MAP_TO_STR(*it));
+            }
+
+            // Build the string to be send
             size_t actualLen = snprintf(mqttStateData, mqttStateDataMaxLen, mqttStateDataFmt,
                 state.battVoltage, state.battState, BATT_STATE_TO_STR(state.battState), 
                 state.fillLevel, state.reservoirState, RESERVOIR_STATE_TO_STR(state.reservoirState),
-                timeStr);
+                activeOutputs, activeOutputsStr, timeStr);
             mqttMgr.publish(mqttStateTopic, mqttStateData, actualLen, MqttManager::QOS_EXACTLY_ONCE, false);
         }
     }
