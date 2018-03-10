@@ -5,13 +5,18 @@ PowerManager::PowerManager(void)
     // setup ADC for battery voltage conversion
     // 11db attenuation is pretty non-linear, so use 6db -> max measurable input voltage ~2.2V -> 22V
     adc1_config_width(ADC_WIDTH_12Bit);
-    //adc1_config_channel_atten(battVoltageChannel, ADC_ATTEN_11db);
     adc1_config_channel_atten(battVoltageChannel, ADC_ATTEN_6db);
 
     // get calibration characteristics for the battery voltage channel
-    // TBD: use v_ref from efuse once the API has support for it
-    //esp_adc_cal_get_characteristics(adcVref, ADC_ATTEN_11db, ADC_WIDTH_12Bit, &battVoltageAdcCharacteristics);
-    esp_adc_cal_get_characteristics(adcVref, ADC_ATTEN_6db, ADC_WIDTH_12Bit, &battVoltageAdcCharacteristics);
+    esp_adc_cal_value_t calType = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_6db, ADC_WIDTH_BIT_12, adcVref, 
+        &battVoltageAdcCharacteristics);
+    if(calType == ESP_ADC_CAL_VAL_EFUSE_TP) {
+        ESP_LOGD(logTag, "ADC1 characterized using two point value.");
+    } else if(calType == ESP_ADC_CAL_VAL_EFUSE_VREF) {
+        ESP_LOGD(logTag, "ADC1 characterized using eFuse Vref.");
+    } else {
+        ESP_LOGD(logTag, "ADC1 characterized using default Vref.");
+    }
 
     // Multiplication and division settings:
     // - The external divider divides by 10.1, but the output function outputs millivolts
