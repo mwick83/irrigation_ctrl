@@ -62,7 +62,7 @@ private:
         std::vector<uint32_t> activeOutputs;  /**< Currently active outputs. */
     } state_t;
 
-    static const int taskStackSize = 2048;
+    static const int taskStackSize = 4096;
     static const UBaseType_t taskPrio = tskIDLE_PRIORITY + 5; // TBD
     StackType_t taskStack[taskStackSize];
     StaticTask_t taskBuf;

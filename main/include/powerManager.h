@@ -33,8 +33,7 @@ class PowerManager
 private:
     const char* logTag = "pwr_mgr";
 
-    //const uint32_t adcVref = 1157;
-    const uint32_t adcVref = 1152;
+    const uint32_t adcVref = 1123;
     float battVoltageMult;
     esp_adc_cal_characteristics_t battVoltageAdcCharacteristics;
 
