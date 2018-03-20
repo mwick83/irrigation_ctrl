@@ -57,8 +57,6 @@ Sadly, the reservoir fill level sensor has proven to be unreliable. I was planni
 
 That's the reason why I implemented configuration options to disable battery monitoring and/or reservoir fill level monitoring. If one is disabled, it will not take part in the decision if an irrigation should take place or not. This not only allows continuing with the development regardless of the fill level sensor, but it also adds more flexibility in the hardware setup.
 
-One other missing piece in the software is proper SNTP handling. The control logic requires to be notified of changes in the system time to work properly. Manually setting the time through the debug console is no problem at all, because I have all the software under my control. But the SNTP implementation is part of the lwIP stack used in the ESP-IDF. It doesn't signalize any state changes at all. According to a [discussion on Github](https://github.com/espressif/esp-idf/pull/1668), I'm not the only one needing such a feature and it looks like it's already in development. I hope it will go public soon. Otherwise, I would have to patch the ESP-IDF sources, which would not be publicly available.
-
 ![Early debugging session on the command console](doc/irrigation_control_bringup_console.png)
 
 The screenshot above shows an early debugging session using the command console. You can see that an MQTT connections as been established and the time has been synced with an SNTP server. I tested some GPIO functionality in the session.
@@ -112,7 +110,7 @@ Each control loop run will publish a state info via MQTT to a configured MQTT br
 
 ```JSON
 {
-    "batteryVoltage": 12958,
+    "batteryVoltage": 12554,
     "batteryState": 1,
     "batteryStateStr": "OK",
     "reservoirFillLevel": -2,
@@ -120,7 +118,9 @@ Each control loop run will publish a state info via MQTT to a configured MQTT br
     "reservoirStateStr": "DISABLED",
     "activeOutputs": [],
     "activeOutputsStr": [],
-    "nextIrrigationEvent": "2018-01-01 07:00:00"
+    "nextIrrigationEvent": "2018-03-21 07:00:00",
+    "sntpLastSync": "2018-03-20 21:14:59",
+    "sntpNextSync": "2018-03-21 01:14:59"
 }
 ```
 
@@ -130,8 +130,17 @@ The state info contains internal and external sensor data as well as system stat
 * The reservoir fill level in percent multiplied by 10 and a state representation (as an integer value and string, i.e. CRITICAL, LOW, OK and DISABLED).
 * Information about currently active outputs (as integer values and strings).
 * Date and time of the next occurring irrigation event based on the currently set date and time.
+* Date and time of the last and next SNTP sync.
 
 I have chosen to publish the voltage and reservoir fill level in mV and "percent multiplied 10" to prevent the usage of floating point variables as much as possible.
+
+### SNTP handling
+
+The control logic requires to be notified of changes in the system time to work properly. Manually setting the time through the debug console is no problem at all, because I have all the software under my control. But the SNTP implementation is part of the lwIP stack used in the ESP-IDF. It doesn't signalize any state changes at all. According to a [discussion on Github](https://github.com/espressif/esp-idf/pull/1668), I'm not the only one needing such a feature and it looks like it's already in development.
+
+As the time of writing and implementing SNTP properly in the control logic, the internal patch wasn't made public. Therefore, I modified the weak-hook patch shown in the thread above. It is available in here as [sntp.patch](sntp.patch). It must be applied to the ESP-IDF checkout. The timeSystem.cpp re-implements these weak functions to interface with the SNTP code of lwIP.
+
+ToBeDone: Update flow charts above with the SNTP implementation.
 
 ## Compiling and running
 

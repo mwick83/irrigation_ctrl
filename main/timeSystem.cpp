@@ -22,14 +22,11 @@
 static const char* LOG_TAG_TIME = "time";
 
 static EventGroupHandle_t timeEvents;
-const int timeEventTimeSet = (1<<0);
+const int TimeSystem_timeEventTimeSet = (1<<0);
+const int TimeSystem_timeEventTimeSetSntp = (1<<1);
 
-static const int sntpTaskStackSize = 2048;
-static const UBaseType_t sntpTaskPrio = tskIDLE_PRIORITY + 1; // TBD
-static StackType_t sntpTaskStack[sntpTaskStackSize];
-static StaticTask_t sntpTaskBuf;
-static TaskHandle_t sntpTaskHandle;
-void sntp_task(void* params);
+RTC_DATA_ATTR static time_t sntpLastSync = 0;
+RTC_DATA_ATTR static time_t sntpNextSync = 0;
 
 std::vector<TimeSystem_HookFncPtr> TimeSystem_Hooks;
 std::vector<void*> TimeSystem_HookParamPtrs;
@@ -37,6 +34,37 @@ static void TimeSystem_CallHooks(time_system_event_t event);
 
 SemaphoreHandle_t TimeSystem_HookMutex;
 StaticSemaphore_t TimeSystem_HookMutexBuf;
+
+// ********************************************************************
+// SNTP setsystime overrides (requires patched ESP-IDF!)
+// ********************************************************************
+#ifdef __cplusplus
+extern "C" {
+#endif
+void sntp_setsystemtime_us(time_t t, suseconds_t us)
+{
+    SNTP_SET_SYSTEM_TIME_US(t, us);
+    sntpLastSync = t;
+
+    ESP_LOGI(LOG_TAG_TIME, "Time set via SNTP. Setting timeEvents.");
+    xEventGroupSetBits(timeEvents, TimeSystem_timeEventTimeSet | TimeSystem_timeEventTimeSetSntp);
+    TimeSystem_CallHooks(TimeSystem_timeEventTimeSet | TimeSystem_timeEventTimeSetSntp);
+    TimeSystem_LogTime();
+}
+
+void sntp_setsystemtime(time_t t)
+{
+    SNTP_SET_SYSTEM_TIME(t);
+    sntpLastSync = t;
+
+    ESP_LOGI(LOG_TAG_TIME, "Time set via SNTP. Setting timeEvents.");
+    xEventGroupSetBits(timeEvents, TimeSystem_timeEventTimeSet | TimeSystem_timeEventTimeSetSntp);
+    TimeSystem_CallHooks(TimeSystem_timeEventTimeSet | TimeSystem_timeEventTimeSetSntp);
+    TimeSystem_LogTime();
+}
+#ifdef __cplusplus
+}
+#endif
 
 // ********************************************************************
 // time system initialization
@@ -63,18 +91,11 @@ extern "C" void TimeSystem_Init(void)
     // Is time set? If not, tm_year will be (1970 - 1900).
     if(!(timeinfo.tm_year < (2017 - 1900))) {
         ESP_LOGI(LOG_TAG_TIME, "-> Time already set. Setting timeEvents.");
-        xEventGroupSetBits(timeEvents, timeEventTimeSet);
-        TimeSystem_CallHooks(TIMESYSTEM_TIME_SET);
+        xEventGroupSetBits(timeEvents, TimeSystem_timeEventTimeSet);
+        TimeSystem_CallHooks(TimeSystem_timeEventTimeSet);
         TimeSystem_LogTime();
     } else {
         ESP_LOGI(LOG_TAG_TIME, "-> Time not set.");
-    }
-
-    sntpTaskHandle = xTaskCreateStatic(sntp_task, "sntp_task", sntpTaskStackSize, nullptr, sntpTaskPrio, sntpTaskStack, &sntpTaskBuf);
-    if(NULL != sntpTaskHandle) {
-        ESP_LOGI(LOG_TAG_TIME, "SNTP task created. Starting.");
-    } else {
-        ESP_LOGE(LOG_TAG_TIME, "SNTP task creation failed!");
     }
 }
 
@@ -90,7 +111,7 @@ extern "C" void TimeSystem_GetCurTimeStr(char *timeStr)
 
     time(&now);
     localtime_r(&now, &timeinfo);
-    strftime(timeStr, 20, "%d.%m.%Y %H:%M:%S", &timeinfo);
+    strftime(timeStr, 20, "%Y-%m-%d %H:%M:%S", &timeinfo);
 }
 
 extern "C" int TimeSystem_SetTime(int16_t day, int16_t month, int16_t year, int16_t hour, int16_t minute, int16_t second)
@@ -124,8 +145,9 @@ extern "C" int TimeSystem_SetTime(int16_t day, int16_t month, int16_t year, int1
 
     if(0 == result) {
         ESP_LOGI(LOG_TAG_TIME, "Time set. Setting timeEvents.");
-        xEventGroupSetBits(timeEvents, timeEventTimeSet);
-        TimeSystem_CallHooks(TIMESYSTEM_TIME_SET);
+        xEventGroupClearBits(timeEvents, TimeSystem_timeEventTimeSetSntp);
+        xEventGroupSetBits(timeEvents, TimeSystem_timeEventTimeSet);
+        TimeSystem_CallHooks(TimeSystem_timeEventTimeSet);
         TimeSystem_LogTime();
     } else {
         ESP_LOGE(LOG_TAG_TIME, "settimeofday failed with exit code %d.", result);
@@ -171,7 +193,12 @@ void TimeSystem_RegisterHook(TimeSystem_HookFncPtr hook, void* param)
 // ********************************************************************
 bool TimeSystem_TimeIsSet(void)
 {
-    return (0 != (xEventGroupGetBits(timeEvents) & timeEventTimeSet));
+    return (0 != (xEventGroupGetBits(timeEvents) & TimeSystem_timeEventTimeSet));
+}
+
+bool TimeSystem_TimeIsSetSntp(void)
+{
+    return (0 != (xEventGroupGetBits(timeEvents) & TimeSystem_timeEventTimeSetSntp));
 }
 
 bool TimeSystem_WaitTimeSet(int waitMillis)
@@ -183,8 +210,25 @@ bool TimeSystem_WaitTimeSet(int waitMillis)
         wait = pdMS_TO_TICKS(waitMillis);
     }
 
-    events = xEventGroupWaitBits(timeEvents, timeEventTimeSet, 0, pdTRUE, wait);
-    if(0 != (events & timeEventTimeSet)) {
+    events = xEventGroupWaitBits(timeEvents, TimeSystem_timeEventTimeSet, pdFALSE, pdTRUE, wait);
+    if(0 != (events & TimeSystem_timeEventTimeSet)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool TimeSystem_WaitTimeSetSntp(int waitMillis)
+{
+    TickType_t wait = portMAX_DELAY;
+    EventBits_t events;
+
+    if(waitMillis >= 0) {
+        wait = pdMS_TO_TICKS(waitMillis);
+    }
+
+    events = xEventGroupWaitBits(timeEvents, TimeSystem_timeEventTimeSet | TimeSystem_timeEventTimeSetSntp, pdFALSE, pdTRUE, wait);
+    if(0 != (events & (TimeSystem_timeEventTimeSet | TimeSystem_timeEventTimeSetSntp))) {
         return true;
     } else {
         return false;
@@ -193,58 +237,29 @@ bool TimeSystem_WaitTimeSet(int waitMillis)
 
 void TimeSystem_LogTime(void)
 {
-    static char strftime_buf[64];
-    time_t now;
-    struct tm timeinfo;
-
-    time(&now);
-    localtime_r(&now, &timeinfo);
-    strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+    static char strftime_buf[20];
+    TimeSystem_GetCurTimeStr(strftime_buf);
     ESP_LOGI(LOG_TAG_TIME, "Current time: %s", strftime_buf);
+}
+
+time_t TimeSystem_GetLastSntpSync(void)
+{
+    return sntpLastSync;
+}
+
+time_t TimeSystem_GetNextSntpSync(void)
+{
+    return sntpNextSync;
+}
+
+void TimeSystem_SetNextSntpSync(time_t next)
+{
+    sntpNextSync = next;
 }
 
 // ********************************************************************
 // SNTP handling
 // ********************************************************************
-void sntp_task(void* params)
-{
-    time_t now;
-    struct tm timeinfo;
-
-    time(&now);
-    localtime_r(&now, &timeinfo);
-
-    while(1) {
-        // wait being online
-        xEventGroupWaitBits(wifiEvents, wifiEventConnected, false, true, portMAX_DELAY);
-
-        ESP_LOGI(LOG_TAG_TIME, "WiFi connect detected. Initializing SNTP.");
-        TimeSystem_SntpStart();
-
-        while(timeinfo.tm_year < (2017 - 1900)) {
-            ESP_LOGI(LOG_TAG_TIME, "Waiting for system time to be set.");
-            vTaskDelay(pdMS_TO_TICKS(2000));
-            time(&now);
-            localtime_r(&now, &timeinfo);
-        }
-        // make sure the time hasn't been set using TimeSystem_SetTime()
-        if(0 != (xEventGroupGetBits(timeEvents) & timeEventTimeSet)) {
-            ESP_LOGI(LOG_TAG_TIME, "Time set. Setting timeEvents.");
-            xEventGroupSetBits(timeEvents, timeEventTimeSet);
-            TimeSystem_CallHooks(TIMESYSTEM_TIME_SET);
-            TimeSystem_LogTime();
-        }
-
-        // wait for potential connection loss
-        xEventGroupWaitBits(wifiEvents, wifiEventDisconnected, false, true, portMAX_DELAY);
-
-        ESP_LOGI(LOG_TAG_TIME, "WiFi disconnect detected. Stopping SNTP.");
-        TimeSystem_SntpStop();
-    }
-
-    vTaskDelete(NULL);
-}
-
 void TimeSystem_SntpStart(void)
 {
     if(0 != (xEventGroupGetBits(wifiEvents) & wifiEventConnected)) {
@@ -257,6 +272,7 @@ void TimeSystem_SntpStart(void)
 void TimeSystem_SntpStop(void)
 {
     if(sntp_enabled()) {
+        xEventGroupClearBits(timeEvents, TimeSystem_timeEventTimeSetSntp);
         sntp_stop();
     }
 }

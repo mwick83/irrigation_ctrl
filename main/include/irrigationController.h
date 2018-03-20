@@ -58,8 +58,10 @@ private:
         reservoir_state_t reservoirState;                       /**< State of the reservoir (e.g. RESERVOIR_OK, ...) */
         uint32_t battVoltage;                                   /**< External battery supply voltage in mV. */
         PowerManager::batt_state_t battState;                   /**< State of the battery (e.g. BATT_FULL, BATT_OK, ...) */
-        time_t nextIrrigEvent;                                  /**< Next time an irrigation event occurs. */
         std::vector<uint32_t> activeOutputs;  /**< Currently active outputs. */
+        time_t nextIrrigEvent;                                  /**< Next time an irrigation event occurs. */
+        time_t sntpLastSync;                                    /**< Last time a time sync via SNTP happened. */
+        time_t sntpNextSync;                                    /**< Next time a time sync via SNTP should happen. */
     } state_t;
 
     static const int taskStackSize = 4096;
@@ -69,7 +71,7 @@ private:
     TaskHandle_t taskHandle;
 
     const int wifiConnectedWaitMillis = 10000;              /**< Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
-    const int timeSetWaitMillis = 10000;                    /**< Timeout in milliseconds to wait for a valid system time */ // TBD: from config
+    const int timeResyncWaitMillis = 2000;                  /**< Timeout in milliseconds to wait for an SNTP time resync */ // TBD: from config
     const int mqttConnectedWaitMillis = 2000;               /**< Timeout in milliseconds to wait for a MQTT client connection */ // TBD: from config
     const int mqttAllPublishedWaitMillis = 2000;            /**< Timeout in milliseconds to wait for the MQTT client publishing all messages */ // TBD: from config
 
@@ -78,6 +80,8 @@ private:
     const int noDeepSleepRangeMillis = 60000;               /**< If an event is this close, don't go to deep sleep */
     /** Time in milliseconds to wakeup before an event */
     const int preEventMillis = peripheralEnStartupMillis + peripheralExtSupplyMillis + 50;
+
+    const double sntpResyncIntervalHours = 4;               /**< Time in hours after which a time resync via SNTP should be requested */ // TBD: from config
 
     const bool disableReservoirCheck = true;                /**< Can be set to disable the reservoir check when irrigating */ // TBD: from config
     const bool disableBatteryCheck = false;                 /**< Can be set to disable the battery check when irrigating */ // TBD: from config
@@ -106,7 +110,9 @@ private:
         "  \"reservoirFillLevel\": %d,\n  \"reservoirState\": %u,\n  \"reservoirStateStr\": \"%s\",\n"
         "  \"activeOutputs\": [%s],\n"
         "  \"activeOutputsStr\": [%s],\n"
-        "  \"nextIrrigationEvent\": \"%s\"\n"
+        "  \"nextIrrigationEvent\": \"%s\",\n"
+        "  \"sntpLastSync\": \"%s\",\n"
+        "  \"sntpNextSync\": \"%s\"\n"
         "}";
     char* mqttStateTopic;                                   /**< @brief Buffer for the state topic. Will be allocated in constructor and freed in the destructor. */
     char* mqttStateData;                                    /**< @brief Buffer for the state data. Will be allocated in constructor and freed in the destructor. */
@@ -115,20 +121,23 @@ private:
      * 1 digit for battery state, 8 digits for battery state string,
      * 4 digits for (fillLevel * 10), 1 digit for reservoir state,
      * 8 digits for reservoir state string,
-     * 2 digits per active output + ', ' as seperator
-     * 6 digits per active output string + ', ' as seperator
-     * 19 digits for the next event datetime. */
+     * 2 digits per active output + ', ' as seperator,
+     * 6 digits per active output string + ', ' as seperator,
+     * 19 digits for the next event datetime,
+     * 19 digits for the next SNTP sync datetime,
+     * 19 digits for the last SNTP sync datetime. */
     size_t mqttStateDataMaxLen;
 
     static void taskFunc(void* params);
     void updateStateActiveOutputs(uint32_t chNum, bool active);
     void publishStateUpdate(void);
 
-    static void timeSytemEventsHookDispatch(void* param, time_system_event_t event);
-    void timeSytemEventTimeSet(void);
+    static void timeSytemEventsHookDispatch(void* param, time_system_event_t events);
+    void timeSytemEventHandler(time_system_event_t events);
 
     EventGroupHandle_t timeEvents;
     const int timeEventTimeSet = (1<<0);
+    const int timeEventTimeSetSntp = (1<<1);
 
 public:
     IrrigationController(void);

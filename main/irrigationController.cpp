@@ -8,17 +8,19 @@ IrrigationController::IrrigationController(void)
 {
     size_t len = strlen(mqttTopicPre) + strlen(mqttStateTopicPost) + 12 + 1;
     mqttStateTopic = (char*) calloc(len, sizeof(char));
-    
+
     // Format string length + 5 digits voltage in mV + 1 digit batt state + 8 digits for battery state string +
     // 4 digits (fillLevel * 10) + 1 digit for reservoir state,
     // 8 digits for reservoir state string,
     // 2 digits per active output + ', ' as seperator
     // 6 digits per active output string + ', ' as seperator
-    // 19 digits for the next event datetime.
+    // 19 digits for the next event datetime
+    // 19 digits for the last SNTP sync datetime
+    // 19 digits for the next SNTP sync datetime.
     // Format string is a bit too long, but don't care too mich about those few bytes
     mqttStateDataMaxLen = strlen(mqttStateDataFmt) + 5 + 1 + 8 + 4 + 1 + 8 + 
         (4+8)*(OutputController::intChannels+OutputController::extChannels) + 
-        19 + 1;
+        19 + 19 + 19 + 1;
     mqttStateData = (char*) calloc(mqttStateDataMaxLen, sizeof(char));
 
     // Reserve space for active outputs
@@ -67,8 +69,8 @@ void IrrigationController::taskFunc(void* params)
     IrrigationController* caller = (IrrigationController*) params;
 
     EventBits_t events;
-    TickType_t wait, loopStartTicks;
-    time_t now, nextIrrigEvent, lastIrrigEvent;
+    TickType_t wait, loopStartTicks, nowTicks;
+    time_t now, nextIrrigEvent, lastIrrigEvent, sntpNextSync;
     bool irrigOk;
 
     // Wait for WiFi to come up. TBD: make configurable (globally), implement WiFiManager for that
@@ -76,25 +78,22 @@ void IrrigationController::taskFunc(void* params)
     if(caller->wifiConnectedWaitMillis >= 0) {
         wait = pdMS_TO_TICKS(caller->wifiConnectedWaitMillis);
     }
-    events = xEventGroupWaitBits(wifiEvents, wifiEventConnected, 0, pdTRUE, wait);
+    events = xEventGroupWaitBits(wifiEvents, wifiEventConnected, pdFALSE, pdTRUE, wait);
     if(0 != (events & wifiEventConnected)) {
         ESP_LOGD(caller->logTag, "WiFi connected.");
     } else {
-        ESP_LOGE(caller->logTag, "WiFi didn't come up with timeout!");
+        ESP_LOGE(caller->logTag, "WiFi didn't come up within timeout!");
     }
 
-    // Wait for the time system to come up. This means either SNTP was successful or the
-    // time was available in the RTC.
-    // TBD: How to achieve periodic SNTP resyncs, as there is currently no way to wait for
-    // a successful SNTP sync within the API.
-    if(!TimeSystem_WaitTimeSet(caller->timeSetWaitMillis)) {
-        // Time hasen't been set within timeout, so assume something to get operating somehow.
+    // Check if we have a valid time
+    if(!TimeSystem_TimeIsSet()) {
+        // Time hasen't been, so assume something to get operating somehow.
         // After setting it here, it will be stored in the RTC, so next time we come up it
         // will not be set to the default again.
         TimeSystem_SetTime(01, 01, 2018, 06, 00, 00);
-        ESP_LOGW(caller->logTag, "Time hasn't been set within timeout! Setting default time: 2018-01-01, 06:00:00.");
+        ESP_LOGW(caller->logTag, "Time hasn't been set yet. Setting default time: 2018-01-01, 06:00:00.");
     } else {
-        ESP_LOGD(caller->logTag, "Got time.");
+        ESP_LOGD(caller->logTag, "Time is already set.");
     }
 
     // Properly initialize some time vars
@@ -111,6 +110,37 @@ void IrrigationController::taskFunc(void* params)
 
     while(1) {
         loopStartTicks = xTaskGetTickCount();
+
+        // Request an SNTP resync if it hasn't happend at all or the next scheduled sync is due,
+        // but only if we are online and no outputs are active. If outputs were active,
+        // requesting the time would turn them off below due to the new time being set.
+        sntpNextSync = TimeSystem_GetNextSntpSync();
+        events = xEventGroupWaitBits(wifiEvents, wifiEventConnected, pdFALSE, pdTRUE, 0);
+        if((0 != (events & wifiEventConnected)) && !outputCtrl.anyOutputsActive()) {
+            if((sntpNextSync == 0) || (difftime(sntpNextSync, time(nullptr)) <= 0.0f)) {
+                ESP_LOGI(caller->logTag, "Requesting an SNTP time (re)sync.");
+                TimeSystem_SntpRequest();
+
+                // Wait for the sync
+                events = xEventGroupWaitBits(caller->timeEvents, caller->timeEventTimeSetSntp, pdTRUE, pdTRUE, pdMS_TO_TICKS(caller->timeResyncWaitMillis));
+                if(0 != (events & caller->timeEventTimeSetSntp)) {
+                    ESP_LOGI(caller->logTag, "SNTP time (re)sync was successful.");
+                } else {
+                    ESP_LOGW(caller->logTag, "SNTP time (re)sync wasn't successful within timeout.");
+                }
+
+                // Stop the SNTP background process, so it won't intefere with running irrigations
+                TimeSystem_SntpStop();
+
+                // Calculate the next SNTP sync
+                struct tm sntpNextSyncTm;
+                sntpNextSync = time(nullptr);
+                localtime_r(&sntpNextSync, &sntpNextSyncTm);
+                sntpNextSyncTm.tm_hour += caller->sntpResyncIntervalHours;
+                sntpNextSync = mktime(&sntpNextSyncTm);
+                TimeSystem_SetNextSntpSync(sntpNextSync);
+            }
+        }
 
         // *********************
         // Power up needed peripherals, DCDC, ...
@@ -194,7 +224,8 @@ void IrrigationController::taskFunc(void* params)
             now = time(nullptr);
 
             // Check if the system time has been (re)set
-            if(0 != (xEventGroupClearBits(caller->timeEvents, caller->timeEventTimeSet) & caller->timeEventTimeSet)) {
+            events = xEventGroupClearBits(caller->timeEvents, caller->timeEventTimeSet | caller->timeEventTimeSetSntp);
+            if(0 != (events & caller->timeEventTimeSet)) {
                 ESP_LOGI(caller->logTag, "Time set detected. Resetting event processing.");
                 // Recalculate lastIrrigEvent to not process events that haven't really 
                 // happend in-between last time and now.
@@ -202,6 +233,16 @@ void IrrigationController::taskFunc(void* params)
                 localtime_r(&now, &nowTm);
                 nowTm.tm_sec--;
                 lastIrrigEvent = mktime(&nowTm);
+
+                // Calculate the next SNTP sync only if this was a manual time set event, otherwise
+                // the next sync time has already been set above
+                if(0 == (events & caller->timeEventTimeSetSntp)) {
+                    struct tm sntpNextSyncTm;
+                    localtime_r(&now, &sntpNextSyncTm);
+                    sntpNextSyncTm.tm_hour += caller->sntpResyncIntervalHours;
+                    sntpNextSync = mktime(&sntpNextSyncTm);
+                    TimeSystem_SetNextSntpSync(sntpNextSync);
+                }
 
                 // Disable all outputs to abort any irrigations that may have been started.
                 outputCtrl.disableAllOutputs();
@@ -250,6 +291,8 @@ void IrrigationController::taskFunc(void* params)
             }
 
             // Publish state with the updated next event time + active outputs
+            caller->state.sntpLastSync = TimeSystem_GetLastSntpSync();
+            caller->state.sntpNextSync = TimeSystem_GetNextSntpSync();
             caller->publishStateUpdate();
         }
 
@@ -284,7 +327,7 @@ void IrrigationController::taskFunc(void* params)
 
         if(pwrMgr.getKeepAwake()) {
             // Calculate loop runtime and compensate the sleep time with it
-            TickType_t nowTicks = xTaskGetTickCount();
+            nowTicks = xTaskGetTickCount();
             int loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > loopStartTicks) ? 
                 (nowTicks - loopStartTicks) :
                 (portMAX_DELAY - loopStartTicks + nowTicks + 1));
@@ -305,7 +348,7 @@ void IrrigationController::taskFunc(void* params)
             // TBD: stop webserver, mqtt and other stuff
 
             // Calculate loop runtime and compensate the sleep time with it
-            TickType_t nowTicks = xTaskGetTickCount();
+            nowTicks = xTaskGetTickCount();
             int loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > loopStartTicks) ? 
                 (nowTicks - loopStartTicks) :
                 (portMAX_DELAY - loopStartTicks + nowTicks + 1));
@@ -379,6 +422,8 @@ void IrrigationController::publishStateUpdate(void)
 {
     static uint8_t mac_addr[6];
     static char timeStr[20];
+    static char sntpLastSyncTimeStr[20];
+    static char sntpNextSyncTimeStr[20];
     static char activeOutputs[4*(OutputController::intChannels+OutputController::extChannels)+1];
     static char activeOutputsStr[8*(OutputController::intChannels+OutputController::extChannels)+1];
     size_t preLen;
@@ -405,15 +450,22 @@ void IrrigationController::publishStateUpdate(void)
 
         if(mqttPrepared) {
             // Prepare next irrigation string
-            time_t nextIrrigEvent = state.nextIrrigEvent;
             struct tm nextIrrigEventTm;
-            localtime_r(&nextIrrigEvent, &nextIrrigEventTm);
+            localtime_r(&state.nextIrrigEvent, &nextIrrigEventTm);
             strftime(timeStr, 20, "%Y-%m-%d %H:%M:%S", &nextIrrigEventTm);
+
+            // Prepare next+last SNTP sync strings
+            struct tm sntpLastSyncTm;
+            localtime_r(&state.sntpLastSync, &sntpLastSyncTm);
+            strftime(sntpLastSyncTimeStr, 20, "%Y-%m-%d %H:%M:%S", &sntpLastSyncTm);
+
+            struct tm sntpNextSyncTm;
+            localtime_r(&state.sntpNextSync, &sntpNextSyncTm);
+            strftime(sntpNextSyncTimeStr, 20, "%Y-%m-%d %H:%M:%S", &sntpNextSyncTm);
 
             // Prepare active outputs strings
             activeOutputs[0] = '\0';
             activeOutputsStr[0] = '\0';
-            // TBD: make sure buffer is not exceeded!
             for(std::vector<uint32_t>::iterator it = state.activeOutputs.begin(); it != state.activeOutputs.end(); it++) {
                 snprintf(activeOutputs, sizeof(activeOutputs) / sizeof(activeOutputs[0]),
                     "%s%s%d", activeOutputs, (it==state.activeOutputs.begin()) ? "" : ", ", *it);
@@ -425,7 +477,7 @@ void IrrigationController::publishStateUpdate(void)
             size_t actualLen = snprintf(mqttStateData, mqttStateDataMaxLen, mqttStateDataFmt,
                 state.battVoltage, state.battState, BATT_STATE_TO_STR(state.battState), 
                 state.fillLevel, state.reservoirState, RESERVOIR_STATE_TO_STR(state.reservoirState),
-                activeOutputs, activeOutputsStr, timeStr);
+                activeOutputs, activeOutputsStr, timeStr, sntpLastSyncTimeStr, sntpNextSyncTimeStr);
             mqttMgr.publish(mqttStateTopic, mqttStateData, actualLen, MqttManager::QOS_EXACTLY_ONCE, false);
         }
     }
@@ -438,10 +490,15 @@ void IrrigationController::publishStateUpdate(void)
  * time changes.
  * 
  */
-void IrrigationController::timeSytemEventTimeSet(void)
+void IrrigationController::timeSytemEventHandler(time_system_event_t events)
 {
     // set an event group bit for the processing task
-    xEventGroupSetBits(timeEvents, timeEventTimeSet);
+    if(0 != (events & TimeSystem_timeEventTimeSet)) {
+        xEventGroupSetBits(timeEvents, timeEventTimeSet);
+    }
+    if(0 != (events & TimeSystem_timeEventTimeSetSntp)) {
+        xEventGroupSetBits(timeEvents, timeEventTimeSetSntp);
+    }
 }
 
 /**
@@ -453,15 +510,15 @@ void IrrigationController::timeSytemEventTimeSet(void)
  * @param param Pointer to the actual IrrigationController instance
  * @param event Concrete event from the TimeSystem.
  */
-void IrrigationController::timeSytemEventsHookDispatch(void* param, time_system_event_t event)
+void IrrigationController::timeSytemEventsHookDispatch(void* param, time_system_event_t events)
 {
     IrrigationController* controller = (IrrigationController*) param;
 
     if(nullptr == controller) {
         ESP_LOGE("unkown", "No valid IrrigationController available to dispatch time system events to!")
     } else {
-        if(event == TIMESYSTEM_TIME_SET) {
-            controller->timeSytemEventTimeSet();
+        if(0 != events) {
+            controller->timeSytemEventHandler(events);
         }
     }
 }

@@ -53,12 +53,12 @@ static esp_err_t wifiEventHandler(void *ctx, system_event_t *event)
             mqttMgr.start();
             break;
         case SYSTEM_EVENT_STA_DISCONNECTED:
-            /* This is a workaround as ESP32 WiFi libs don't currently
-            auto-reassociate. */
-            esp_wifi_connect();
             xEventGroupClearBits(wifiEvents, wifiEventConnected);
             xEventGroupSetBits(wifiEvents, wifiEventDisconnected);
             mqttMgr.stop();
+            TimeSystem_SntpStop();
+            /* This is a workaround as ESP32 WiFi libs don't currently auto-reassociate. */
+            esp_wifi_connect();
             break;
         default:
             break;
