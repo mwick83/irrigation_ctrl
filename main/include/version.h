@@ -6,7 +6,7 @@
 #endif
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.1"
+#define PACKAGE_VERSION "0.7"
 #endif
 
 #ifndef GIT_VERSION

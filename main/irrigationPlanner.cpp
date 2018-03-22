@@ -20,26 +20,26 @@ IrrigationPlanner::IrrigationPlanner(void)
     for(int i = 0; i < (sizeof(hours)/sizeof(hours[0])); i++) {
         event = new IrrigationEvent();
         event->setDailyRepetition(hours[i], 0, 0);
-        event->addChannelConfig(OutputController::CH_AUX0, true);
-        events.push_back(event);
-        event = new IrrigationEvent();
-        event->setDailyRepetition(hours[i], 0, 15);
         event->addChannelConfig(OutputController::CH_MAIN, true);
         events.push_back(event);
         event = new IrrigationEvent();
-        event->setDailyRepetition(hours[i], 0, 20);
+        event->setDailyRepetition(hours[i], 0, 15);
         event->addChannelConfig(OutputController::CH_AUX1, true);
+        events.push_back(event);
+        event = new IrrigationEvent();
+        event->setDailyRepetition(hours[i], 0, 20);
+        event->addChannelConfig(OutputController::CH_AUX0, true);
         events.push_back(event);
         event = new IrrigationEvent();
         event->setDailyRepetition(hours[i], 1, 0);
         event->addChannelConfig(OutputController::CH_MAIN, false);
         events.push_back(event);
         event = new IrrigationEvent();
-        event->setDailyRepetition(hours[i], 1, 15);
+        event->setDailyRepetition(hours[i], 1, 20);
         event->addChannelConfig(OutputController::CH_AUX0, false);
         events.push_back(event);
         event = new IrrigationEvent();
-        event->setDailyRepetition(hours[i], 1, 20);
+        event->setDailyRepetition(hours[i], 1, 30);
         event->addChannelConfig(OutputController::CH_AUX1, false);
         events.push_back(event);
     }

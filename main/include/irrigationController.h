@@ -70,16 +70,15 @@ private:
     StaticTask_t taskBuf;
     TaskHandle_t taskHandle;
 
-    const int wifiConnectedWaitMillis = 10000;              /**< Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
+    const int wifiConnectedWaitMillis = 14000;              /**< Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
     const int timeResyncWaitMillis = 2000;                  /**< Timeout in milliseconds to wait for an SNTP time resync */ // TBD: from config
     const int mqttConnectedWaitMillis = 2000;               /**< Timeout in milliseconds to wait for a MQTT client connection */ // TBD: from config
     const int mqttAllPublishedWaitMillis = 2000;            /**< Timeout in milliseconds to wait for the MQTT client publishing all messages */ // TBD: from config
 
-    const int wakeupIntervalMillis = 10000;                 /**< Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
-    const int wakeupIntervalKeepAwakeMillis = 5000;         /**< Processing task wakeup time in milliseconds when keepawake is active */
+    const int wakeupIntervalMillis = 600000;                /**< Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
+    const int wakeupIntervalKeepAwakeMillis = 30000;        /**< Processing task wakeup time in milliseconds when keepawake is active */
     const int noDeepSleepRangeMillis = 60000;               /**< If an event is this close, don't go to deep sleep */
-    /** Time in milliseconds to wakeup before an event */
-    const int preEventMillis = peripheralEnStartupMillis + peripheralExtSupplyMillis + 50;
+    const int preEventMillis = peripheralEnStartupMillis + peripheralExtSupplyMillis + 50; /**< Time in milliseconds to wakeup before an event */
 
     const double sntpResyncIntervalHours = 4;               /**< Time in hours after which a time resync via SNTP should be requested */ // TBD: from config
 
