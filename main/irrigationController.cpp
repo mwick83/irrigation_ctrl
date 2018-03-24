@@ -382,7 +382,7 @@ void IrrigationController::taskFunc(void* params)
 
             int sleepMillis = caller->wakeupIntervalKeepAwakeMillis - loopRunTimeMillis;
             if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - caller->preEventMillis;
-            if(sleepMillis < 0) sleepMillis = 0;
+            if(sleepMillis < 500) sleepMillis = 500;
 
             ESP_LOGD(caller->logTag, "Task is going to sleep for %d ms.", sleepMillis);
             vTaskDelay(pdMS_TO_TICKS(sleepMillis));
@@ -403,7 +403,7 @@ void IrrigationController::taskFunc(void* params)
 
             int sleepMillis = caller->wakeupIntervalMillis - loopRunTimeMillis;
             if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - caller->preEventMillisDeepSleep;
-            if(sleepMillis < 0) sleepMillis = 0;
+            if(sleepMillis < 500) sleepMillis = 500;
 
             // Check if there is enough wakeup time
             if( (sleepMillis < caller->noDeepSleepRangeMillis) && 
