@@ -86,6 +86,7 @@ IrrigationEvent::err_t IrrigationEvent::setSingleEvent(int hour, int minute, int
         eventTime.tm_mday = day;
         eventTime.tm_mon = month - 1;
         eventTime.tm_year = year - 1900;
+        eventTime.tm_isdst = -1;
 
         repetitionType = SINGLE;
     }
@@ -162,6 +163,10 @@ time_t IrrigationEvent::getNextOccurance(void) const
         if(refDaySecs > nextDaySecs) {
             nextTm.tm_mday++;
         }
+
+        // Set DST status to not available, because it may be different by 
+        // the modifications modifications
+        nextTm.tm_isdst = -1;
 
         next = mktime(&nextTm);
     }
