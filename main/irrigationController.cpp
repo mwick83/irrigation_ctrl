@@ -1,5 +1,8 @@
 #include "irrigationController.h"
 
+// TBD: encapsulate
+RTC_DATA_ATTR static time_t lastIrrigEvent = 0;
+
 /**
  * @brief Default constructor, which performs basic initialization,
  * but doesn't start processing.
@@ -70,7 +73,7 @@ void IrrigationController::taskFunc(void* params)
 
     EventBits_t events;
     TickType_t wait, loopStartTicks, nowTicks;
-    time_t now, nextIrrigEvent, lastIrrigEvent, sntpNextSync;
+    time_t now, nextIrrigEvent, sntpNextSync;
     bool irrigOk;
 
     // Wait for WiFi to come up. TBD: make configurable (globally), implement WiFiManager for that
@@ -99,10 +102,12 @@ void IrrigationController::taskFunc(void* params)
     // Properly initialize some time vars
     {
         now = time(nullptr);
-        struct tm nowTm;
-        localtime_r(&now, &nowTm);
-        nowTm.tm_sec--;
-        lastIrrigEvent = mktime(&nowTm);
+        if(lastIrrigEvent == 0) {
+            struct tm nowTm;
+            localtime_r(&now, &nowTm);
+            nowTm.tm_sec--;
+            lastIrrigEvent = mktime(&nowTm);
+        }
     }
 
     // Register time system hook
@@ -110,37 +115,6 @@ void IrrigationController::taskFunc(void* params)
 
     while(1) {
         loopStartTicks = xTaskGetTickCount();
-
-        // Request an SNTP resync if it hasn't happend at all or the next scheduled sync is due,
-        // but only if we are online and no outputs are active. If outputs were active,
-        // requesting the time would turn them off below due to the new time being set.
-        sntpNextSync = TimeSystem_GetNextSntpSync();
-        events = xEventGroupWaitBits(wifiEvents, wifiEventConnected, pdFALSE, pdTRUE, 0);
-        if((0 != (events & wifiEventConnected)) && !outputCtrl.anyOutputsActive()) {
-            if((sntpNextSync == 0) || (difftime(sntpNextSync, time(nullptr)) <= 0.0f)) {
-                ESP_LOGI(caller->logTag, "Requesting an SNTP time (re)sync.");
-                TimeSystem_SntpRequest();
-
-                // Wait for the sync
-                events = xEventGroupWaitBits(caller->timeEvents, caller->timeEventTimeSetSntp, pdTRUE, pdTRUE, pdMS_TO_TICKS(caller->timeResyncWaitMillis));
-                if(0 != (events & caller->timeEventTimeSetSntp)) {
-                    ESP_LOGI(caller->logTag, "SNTP time (re)sync was successful.");
-                } else {
-                    ESP_LOGW(caller->logTag, "SNTP time (re)sync wasn't successful within timeout.");
-                }
-
-                // Stop the SNTP background process, so it won't intefere with running irrigations
-                TimeSystem_SntpStop();
-
-                // Calculate the next SNTP sync
-                struct tm sntpNextSyncTm;
-                sntpNextSync = time(nullptr);
-                localtime_r(&sntpNextSync, &sntpNextSyncTm);
-                sntpNextSyncTm.tm_hour += caller->sntpResyncIntervalHours;
-                sntpNextSync = mktime(&sntpNextSyncTm);
-                TimeSystem_SetNextSntpSync(sntpNextSync);
-            }
-        }
 
         // *********************
         // Power up needed peripherals, DCDC, ...
@@ -297,13 +271,72 @@ void IrrigationController::taskFunc(void* params)
         }
 
         // *********************
-        // Sleeping
+        // SNTP resync
+        // *********************
+        bool skipSntpResync = false;
+
+        // Skip resync in case an upcoming event is close
+        millisTillNextEvent = (int) round(difftime(nextIrrigEvent, time(nullptr)) * 1000.0);
+        if(millisTillNextEvent <= caller->noSntpResyncRangeMillis) {
+            skipSntpResync = true;
+            ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because next upcoming event is too close.");
+        }
+
+        // Skip rsync if we are offline
+        events = xEventGroupWaitBits(wifiEvents, wifiEventConnected, pdFALSE, pdTRUE, 0);
+        if (0 == (events & wifiEventConnected)) {
+            skipSntpResync = true;
+            ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because we are offline.");
+        }
+
+        // Skip resync if outputs are active, because the new time being set would disable
+        // all outputs and they would be turned back on again
+        if(outputCtrl.anyOutputsActive()) {
+            skipSntpResync = true;
+            ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because outputs are active.");
+        }
+
+        if(!skipSntpResync) {
+            // Request an SNTP resync if it hasn't happend at all or the next scheduled sync is due,
+            sntpNextSync = TimeSystem_GetNextSntpSync();
+            if((sntpNextSync == 0) || (difftime(sntpNextSync, time(nullptr)) <= 0.0f)) {
+                ESP_LOGI(caller->logTag, "Requesting an SNTP time (re)sync.");
+                TimeSystem_SntpRequest();
+
+                // Wait for the sync
+                events = xEventGroupWaitBits(caller->timeEvents, caller->timeEventTimeSetSntp, pdTRUE, pdTRUE, pdMS_TO_TICKS(caller->timeResyncWaitMillis));
+                if(0 != (events & caller->timeEventTimeSetSntp)) {
+                    ESP_LOGI(caller->logTag, "SNTP time (re)sync was successful.");
+                } else {
+                    ESP_LOGW(caller->logTag, "SNTP time (re)sync wasn't successful within timeout.");
+                }
+
+                // Stop the SNTP background process, so it won't intefere with running irrigations
+                TimeSystem_SntpStop();
+
+                // Calculate the next SNTP sync
+                struct tm sntpNextSyncTm;
+                sntpNextSync = time(nullptr);
+                localtime_r(&sntpNextSync, &sntpNextSyncTm);
+                sntpNextSyncTm.tm_hour += caller->sntpResyncIntervalHours;
+                sntpNextSync = mktime(&sntpNextSyncTm);
+                TimeSystem_SetNextSntpSync(sntpNextSync);
+
+                // Update SNTP info
+                caller->state.sntpLastSync = TimeSystem_GetLastSntpSync();
+                caller->state.sntpNextSync = TimeSystem_GetNextSntpSync();
+            }
+        }
+
+        // *********************
+        // Sleep preparation
         // *********************
         // Get current time again for sleep calculation
         now = time(nullptr);
 
         // Check if the system time has been (re)set
-        if(0 != (xEventGroupClearBits(caller->timeEvents, caller->timeEventTimeSet) & caller->timeEventTimeSet)) {
+        events = xEventGroupClearBits(caller->timeEvents, caller->timeEventTimeSet | caller->timeEventTimeSetSntp);
+        if(0 != (events & caller->timeEventTimeSet)) {
             // Recalculate lastIrrigEvent and nextIrrig to not process events that haven't really 
             // happend in-between last time and now.
             ESP_LOGI(caller->logTag, "Time set detected. Resetting event processing.");
@@ -313,8 +346,22 @@ void IrrigationController::taskFunc(void* params)
             lastIrrigEvent = mktime(&nowTm);
             nextIrrigEvent = irrigPlanner.getNextEventTime(lastIrrigEvent, true);
 
+            // Calculate the next SNTP sync only if this was a manual time set event, otherwise
+            // the next sync time has already been set above
+            if(0 == (events & caller->timeEventTimeSetSntp)) {
+                struct tm sntpNextSyncTm;
+                localtime_r(&now, &sntpNextSyncTm);
+                sntpNextSyncTm.tm_hour += caller->sntpResyncIntervalHours;
+                sntpNextSync = mktime(&sntpNextSyncTm);
+                TimeSystem_SetNextSntpSync(sntpNextSync);
+            }
+
             // Disable all outputs to abort any irrigations that may have been started.
             outputCtrl.disableAllOutputs();
+
+            // Update next irrigation event and publish (also the new SNTP info set above)
+            caller->state.nextIrrigEvent = nextIrrigEvent;
+            caller->publishStateUpdate();
         }
 
         millisTillNextEvent = (int) round(difftime(nextIrrigEvent, now) * 1000.0);
@@ -335,7 +382,7 @@ void IrrigationController::taskFunc(void* params)
 
             int sleepMillis = caller->wakeupIntervalKeepAwakeMillis - loopRunTimeMillis;
             if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - caller->preEventMillis;
-            if(sleepMillis < 50) sleepMillis = 50;
+            if(sleepMillis < 0) sleepMillis = 0;
 
             ESP_LOGD(caller->logTag, "Task is going to sleep for %d ms.", sleepMillis);
             vTaskDelay(pdMS_TO_TICKS(sleepMillis));
@@ -355,8 +402,8 @@ void IrrigationController::taskFunc(void* params)
             ESP_LOGD(caller->logTag, "Loop runtime %d ms.", loopRunTimeMillis);
 
             int sleepMillis = caller->wakeupIntervalMillis - loopRunTimeMillis;
-            if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - caller->preEventMillis;
-            if(sleepMillis < 50) sleepMillis = 50;
+            if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - caller->preEventMillisDeepSleep;
+            if(sleepMillis < 0) sleepMillis = 0;
 
             // Check if there is enough wakeup time
             if( (sleepMillis < caller->noDeepSleepRangeMillis) && 
