@@ -30,6 +30,11 @@ IrrigationController::IrrigationController(void)
     state.activeOutputs.clear();
     state.activeOutputs.reserve(OutputController::intChannels+OutputController::extChannels);
 
+    // prepare empty last state
+    memset(&lastState, 0, sizeof(state_t));
+    lastState.activeOutputs.clear();
+    lastState.activeOutputs.reserve(OutputController::intChannels+OutputController::extChannels);
+
     // Prepare time system event hook to react properly on time changes
     // Note: hook registration will be performed by the main thread, because the
     // IrrigationPlanner instance will be created before the TimeSystem is initialized.
@@ -476,56 +481,64 @@ void IrrigationController::publishStateUpdate(void)
     size_t preLen;
     size_t postLen;
 
-    if(false == mqttMgr.waitConnected(mqttConnectedWaitMillis)) {
-        ESP_LOGW(logTag, "MQTT manager has no connection after timeout.")
-    } else {
-        if(!mqttPrepared) {
-            if(ESP_OK == esp_wifi_get_mac(ESP_IF_WIFI_STA, mac_addr)) {
-                preLen = strlen(mqttTopicPre);
-                postLen = strlen(mqttStateTopicPost);
-                memcpy(mqttStateTopic, mqttTopicPre, preLen);
-                for(int i=0; i<6; i++) {
-                    sprintf(&mqttStateTopic[preLen+i*2], "%02x", mac_addr[i]);
+    // TBD: Compare more lax, i.e. allow little differences in batt voltage, etc.
+    int stateCmp = memcmp(&state, &lastState, sizeof(state_t));
+
+    if(0 != stateCmp) {
+        if(false == mqttMgr.waitConnected(mqttConnectedWaitMillis)) {
+            ESP_LOGW(logTag, "MQTT manager has no connection after timeout.")
+        } else {
+            if(!mqttPrepared) {
+                if(ESP_OK == esp_wifi_get_mac(ESP_IF_WIFI_STA, mac_addr)) {
+                    preLen = strlen(mqttTopicPre);
+                    postLen = strlen(mqttStateTopicPost);
+                    memcpy(mqttStateTopic, mqttTopicPre, preLen);
+                    for(int i=0; i<6; i++) {
+                        sprintf(&mqttStateTopic[preLen+i*2], "%02x", mac_addr[i]);
+                    }
+                    memcpy(&mqttStateTopic[preLen+12], mqttStateTopicPost, postLen);
+                    mqttStateTopic[preLen+12+postLen] = 0;
+                    mqttPrepared = true;
+                } else {
+                    ESP_LOGE(logTag, "Getting MAC address failed!");
                 }
-                memcpy(&mqttStateTopic[preLen+12], mqttStateTopicPost, postLen);
-                mqttStateTopic[preLen+12+postLen] = 0;
-                mqttPrepared = true;
-            } else {
-                ESP_LOGE(logTag, "Getting MAC address failed!");
-            }
-        }
-
-        if(mqttPrepared) {
-            // Prepare next irrigation string
-            struct tm nextIrrigEventTm;
-            localtime_r(&state.nextIrrigEvent, &nextIrrigEventTm);
-            strftime(timeStr, 20, "%Y-%m-%d %H:%M:%S", &nextIrrigEventTm);
-
-            // Prepare next+last SNTP sync strings
-            struct tm sntpLastSyncTm;
-            localtime_r(&state.sntpLastSync, &sntpLastSyncTm);
-            strftime(sntpLastSyncTimeStr, 20, "%Y-%m-%d %H:%M:%S", &sntpLastSyncTm);
-
-            struct tm sntpNextSyncTm;
-            localtime_r(&state.sntpNextSync, &sntpNextSyncTm);
-            strftime(sntpNextSyncTimeStr, 20, "%Y-%m-%d %H:%M:%S", &sntpNextSyncTm);
-
-            // Prepare active outputs strings
-            activeOutputs[0] = '\0';
-            activeOutputsStr[0] = '\0';
-            for(std::vector<uint32_t>::iterator it = state.activeOutputs.begin(); it != state.activeOutputs.end(); it++) {
-                snprintf(activeOutputs, sizeof(activeOutputs) / sizeof(activeOutputs[0]),
-                    "%s%s%d", activeOutputs, (it==state.activeOutputs.begin()) ? "" : ", ", *it);
-                snprintf(activeOutputsStr, sizeof(activeOutputsStr) / sizeof(activeOutputsStr[0]),
-                    "%s%s\"%s\"", activeOutputsStr, (it==state.activeOutputs.begin()) ? "" : ", ", CH_MAP_TO_STR(*it));
             }
 
-            // Build the string to be send
-            size_t actualLen = snprintf(mqttStateData, mqttStateDataMaxLen, mqttStateDataFmt,
-                state.battVoltage, state.battState, BATT_STATE_TO_STR(state.battState), 
-                state.fillLevel, state.reservoirState, RESERVOIR_STATE_TO_STR(state.reservoirState),
-                activeOutputs, activeOutputsStr, timeStr, sntpLastSyncTimeStr, sntpNextSyncTimeStr);
-            mqttMgr.publish(mqttStateTopic, mqttStateData, actualLen, MqttManager::QOS_EXACTLY_ONCE, false);
+            if(mqttPrepared) {
+                // Prepare next irrigation string
+                struct tm nextIrrigEventTm;
+                localtime_r(&state.nextIrrigEvent, &nextIrrigEventTm);
+                strftime(timeStr, 20, "%Y-%m-%d %H:%M:%S", &nextIrrigEventTm);
+
+                // Prepare next+last SNTP sync strings
+                struct tm sntpLastSyncTm;
+                localtime_r(&state.sntpLastSync, &sntpLastSyncTm);
+                strftime(sntpLastSyncTimeStr, 20, "%Y-%m-%d %H:%M:%S", &sntpLastSyncTm);
+
+                struct tm sntpNextSyncTm;
+                localtime_r(&state.sntpNextSync, &sntpNextSyncTm);
+                strftime(sntpNextSyncTimeStr, 20, "%Y-%m-%d %H:%M:%S", &sntpNextSyncTm);
+
+                // Prepare active outputs strings
+                activeOutputs[0] = '\0';
+                activeOutputsStr[0] = '\0';
+                for(std::vector<uint32_t>::iterator it = state.activeOutputs.begin(); it != state.activeOutputs.end(); it++) {
+                    snprintf(activeOutputs, sizeof(activeOutputs) / sizeof(activeOutputs[0]),
+                        "%s%s%d", activeOutputs, (it==state.activeOutputs.begin()) ? "" : ", ", *it);
+                    snprintf(activeOutputsStr, sizeof(activeOutputsStr) / sizeof(activeOutputsStr[0]),
+                        "%s%s\"%s\"", activeOutputsStr, (it==state.activeOutputs.begin()) ? "" : ", ", CH_MAP_TO_STR(*it));
+                }
+
+                // Build the string to be send
+                size_t actualLen = snprintf(mqttStateData, mqttStateDataMaxLen, mqttStateDataFmt,
+                    state.battVoltage, state.battState, BATT_STATE_TO_STR(state.battState), 
+                    state.fillLevel, state.reservoirState, RESERVOIR_STATE_TO_STR(state.reservoirState),
+                    activeOutputs, activeOutputsStr, timeStr, sntpLastSyncTimeStr, sntpNextSyncTimeStr);
+                mqttMgr.publish(mqttStateTopic, mqttStateData, actualLen, MqttManager::QOS_EXACTLY_ONCE, false);
+
+                // Copy the sent state over to lastState, but only if we actually sent it and not in the other cases
+                memcpy(&lastState, &state, sizeof(state_t));
+            }
         }
     }
 }

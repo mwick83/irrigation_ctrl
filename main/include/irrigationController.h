@@ -96,6 +96,7 @@ private:
     const bool disableBatteryCheck = false;                 /**< Can be set to disable the battery check when irrigating */ // TBD: from config
 
     state_t state;                                          /**< Internal state representation */
+    state_t lastState;                                      /**< Internal state representation (as sent via MQTT the last time) */
 
     // MQTT related state/data
     bool mqttPrepared = false;
