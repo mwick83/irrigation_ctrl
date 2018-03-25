@@ -2,6 +2,9 @@
 
 #include "outputController.h" //temporarily needed for CH_MAIN, ...
 
+//#define IRRIGATION_PLANNER_PRINT_ALL_EVENTS
+//#define IRRIGATION_PLANNER_NEXT_EVENT_DEBUG
+
 /**
  * @brief Default constructor, which performs basic initialization.
  */
@@ -44,23 +47,25 @@ IrrigationPlanner::IrrigationPlanner(void)
         events.push_back(event);
     }
 
-    // print all events out for debugging
-    for(std::vector<IrrigationEvent*>::iterator it = events.begin() ; it != events.end(); ++it) {
-        (*it)->updateReferenceTime(time(NULL));
-        time_t eventTime = (*it)->getNextOccurance();
-        struct tm eventTm;
-        localtime_r(&eventTime, &eventTm);
+    #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
+        // print all events out for debugging
+        for(std::vector<IrrigationEvent*>::iterator it = events.begin() ; it != events.end(); ++it) {
+            (*it)->updateReferenceTime(time(NULL));
+            time_t eventTime = (*it)->getNextOccurance();
+            struct tm eventTm;
+            localtime_r(&eventTime, &eventTm);
 
-        for(int i = 0; i < (*it)->getChannelConfigSize(); i++) {
-            uint32_t chNum;
-            bool switchOn;
-            (*it)->getChannelConfigInfo(i, &chNum, &switchOn);
-            ESP_LOGD(logTag, "Event at %02d.%02d.%04d %02d:%02d:%02d, channel = %d, switchOn = %d", 
-                eventTm.tm_mday, eventTm.tm_mon+1, 1900+eventTm.tm_year,
-                eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec,
-                chNum, switchOn ? 1:0);
+            for(int i = 0; i < (*it)->getChannelConfigSize(); i++) {
+                uint32_t chNum;
+                bool switchOn;
+                (*it)->getChannelConfigInfo(i, &chNum, &switchOn);
+                ESP_LOGD(logTag, "Event at %02d.%02d.%04d %02d:%02d:%02d, channel = %d, switchOn = %d", 
+                    eventTm.tm_mday, eventTm.tm_mon+1, 1900+eventTm.tm_year,
+                    eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec,
+                    chNum, switchOn ? 1:0);
+            }
         }
-    }
+    #endif
 }
 
 /**
@@ -95,7 +100,9 @@ time_t IrrigationPlanner::getNextEventTime(void)
 time_t IrrigationPlanner::getNextEventTime(time_t startTime, bool excludeStartTime)
 {
     time_t next = 0;
-    std::vector<IrrigationEvent::ch_cfg_t> chCfg;
+    #ifdef IRRIGATION_PLANNER_NEXT_EVENT_DEBUG
+        std::vector<IrrigationEvent::ch_cfg_t> chCfg;
+    #endif
 
     if(excludeStartTime) {
         // convert startTime to time to easily increase the startTime by one sec
@@ -113,17 +120,21 @@ time_t IrrigationPlanner::getNextEventTime(time_t startTime, bool excludeStartTi
         struct tm eventTm;
         localtime_r(&eventTime, &eventTm);
 
-        chCfg.clear();
-        (*it)->appendChannelConfig(&chCfg);
-        for(std::vector<IrrigationEvent::ch_cfg_t>::iterator chIt = chCfg.begin(); chIt != chCfg.end(); chIt++) {
-            ESP_LOGD(logTag, "Event at %02d.%02d.%04d %02d:%02d:%02d, channel = %d, switchOn = %d", 
-                eventTm.tm_mday, eventTm.tm_mon+1, 1900+eventTm.tm_year,
-                eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec,
-                (*chIt).chNum, (*chIt).switchOn ? 1:0);
-        }
+        #ifdef IRRIGATION_PLANNER_NEXT_EVENT_DEBUG
+            chCfg.clear();
+            (*it)->appendChannelConfig(&chCfg);
+            for(std::vector<IrrigationEvent::ch_cfg_t>::iterator chIt = chCfg.begin(); chIt != chCfg.end(); chIt++) {
+                ESP_LOGD(logTag, "Event at %02d.%02d.%04d %02d:%02d:%02d, channel = %d, switchOn = %d", 
+                    eventTm.tm_mday, eventTm.tm_mon+1, 1900+eventTm.tm_year,
+                    eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec,
+                    (*chIt).chNum, (*chIt).switchOn ? 1:0);
+            }
+        #endif
 
         if((next == 0) || (next > eventTime)) {
-            ESP_LOGD(logTag, "This is our new candidate!");
+            #ifdef IRRIGATION_PLANNER_NEXT_EVENT_DEBUG
+                ESP_LOGD(logTag, "This is our new candidate!");
+            #endif
             next = eventTime;
         }
 
@@ -154,7 +165,6 @@ IrrigationPlanner::err_t IrrigationPlanner::getEventChannelConfig(time_t eventTi
 {
     err_t ret = ERR_OK;
     if(nullptr == dest) return ERR_INVALID_PARAM;
-
 
     // clear destination vector
     dest->clear();
