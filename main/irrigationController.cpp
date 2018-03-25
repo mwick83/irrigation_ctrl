@@ -80,6 +80,7 @@ void IrrigationController::taskFunc(void* params)
     TickType_t wait, loopStartTicks, nowTicks;
     time_t now, nextIrrigEvent, sntpNextSync;
     bool irrigOk;
+    bool firstRun = true;
 
     // Wait for WiFi to come up. TBD: make configurable (globally), implement WiFiManager for that
     wait = portMAX_DELAY;
@@ -384,6 +385,7 @@ void IrrigationController::taskFunc(void* params)
                 (nowTicks - loopStartTicks) :
                 (portMAX_DELAY - loopStartTicks + nowTicks + 1));
             ESP_LOGD(caller->logTag, "Loop runtime %d ms.", loopRunTimeMillis);
+            firstRun = false;
 
             int sleepMillis = caller->wakeupIntervalKeepAwakeMillis - loopRunTimeMillis;
             if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - caller->preEventMillis;
@@ -400,11 +402,22 @@ void IrrigationController::taskFunc(void* params)
             // TBD: stop webserver, mqtt and other stuff
 
             // Calculate loop runtime and compensate the sleep time with it
-            nowTicks = xTaskGetTickCount();
-            int loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > loopStartTicks) ? 
-                (nowTicks - loopStartTicks) :
-                (portMAX_DELAY - loopStartTicks + nowTicks + 1));
-            ESP_LOGD(caller->logTag, "Loop runtime %d ms.", loopRunTimeMillis);
+            int loopRunTimeMillis;
+            if(firstRun) {
+                // This is the normal case for deep sleep: Compensate also for the
+                // boot time.
+                loopRunTimeMillis = portTICK_RATE_MS * xTaskGetTickCount();
+                firstRun = false;
+                ESP_LOGD(caller->logTag, "Loop runtime (incl. boot) %d ms.", loopRunTimeMillis);
+            } else {
+                // This is the case when the system was in keep awake, previously. So,
+                // compensate for the loop time only.
+                nowTicks = xTaskGetTickCount();
+                loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > loopStartTicks) ? 
+                    (nowTicks - loopStartTicks) :
+                    (portMAX_DELAY - loopStartTicks + nowTicks + 1));
+                ESP_LOGD(caller->logTag, "Loop runtime %d ms.", loopRunTimeMillis);
+            }
 
             int sleepMillis = caller->wakeupIntervalMillis - loopRunTimeMillis;
             if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - caller->preEventMillisDeepSleep;
