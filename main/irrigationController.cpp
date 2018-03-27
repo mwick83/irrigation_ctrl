@@ -279,33 +279,33 @@ void IrrigationController::taskFunc(void* params)
         // *********************
         // SNTP resync
         // *********************
-        bool skipSntpResync = false;
+        // Request an SNTP resync if it hasn't happend at all or the next scheduled sync is due
+        sntpNextSync = TimeSystem_GetNextSntpSync();
+        if((sntpNextSync == 0) || (difftime(sntpNextSync, time(nullptr)) <= 0.0f)) {
+            bool skipSntpResync = false;
 
-        // Skip resync in case an upcoming event is close
-        millisTillNextEvent = (int) round(difftime(nextIrrigEvent, time(nullptr)) * 1000.0);
-        if(millisTillNextEvent <= caller->noSntpResyncRangeMillis) {
-            skipSntpResync = true;
-            ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because next upcoming event is too close.");
-        }
+            // Skip resync in case an upcoming event is close
+            millisTillNextEvent = (int) round(difftime(nextIrrigEvent, time(nullptr)) * 1000.0);
+            if(millisTillNextEvent <= caller->noSntpResyncRangeMillis) {
+                skipSntpResync = true;
+                ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because next upcoming event is too close.");
+            }
 
-        // Skip rsync if we are offline
-        events = xEventGroupWaitBits(wifiEvents, wifiEventConnected, pdFALSE, pdTRUE, 0);
-        if (0 == (events & wifiEventConnected)) {
-            skipSntpResync = true;
-            ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because we are offline.");
-        }
+            // Skip rsync if we are offline
+            events = xEventGroupWaitBits(wifiEvents, wifiEventConnected, pdFALSE, pdTRUE, 0);
+            if (0 == (events & wifiEventConnected)) {
+                skipSntpResync = true;
+                ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because we are offline.");
+            }
 
-        // Skip resync if outputs are active, because the new time being set would disable
-        // all outputs and they would be turned back on again
-        if(outputCtrl.anyOutputsActive()) {
-            skipSntpResync = true;
-            ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because outputs are active.");
-        }
+            // Skip resync if outputs are active, because the new time being set would disable
+            // all outputs and they would be turned back on again
+            if(outputCtrl.anyOutputsActive()) {
+                skipSntpResync = true;
+                ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because outputs are active.");
+            }
 
-        if(!skipSntpResync) {
-            // Request an SNTP resync if it hasn't happend at all or the next scheduled sync is due,
-            sntpNextSync = TimeSystem_GetNextSntpSync();
-            if((sntpNextSync == 0) || (difftime(sntpNextSync, time(nullptr)) <= 0.0f)) {
+            if(!skipSntpResync) {
                 ESP_LOGI(caller->logTag, "Requesting an SNTP time (re)sync.");
                 TimeSystem_SntpRequest();
 
