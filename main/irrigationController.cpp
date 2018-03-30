@@ -311,11 +311,6 @@ void IrrigationController::taskFunc(void* params)
 
                 // Wait for the sync
                 events = xEventGroupWaitBits(caller->timeEvents, caller->timeEventTimeSetSntp, pdTRUE, pdTRUE, pdMS_TO_TICKS(caller->timeResyncWaitMillis));
-                if(0 != (events & caller->timeEventTimeSetSntp)) {
-                    ESP_LOGI(caller->logTag, "SNTP time (re)sync was successful.");
-                } else {
-                    ESP_LOGW(caller->logTag, "SNTP time (re)sync wasn't successful within timeout.");
-                }
 
                 // Stop the SNTP background process, so it won't intefere with running irrigations
                 TimeSystem_SntpStop();
@@ -324,7 +319,14 @@ void IrrigationController::taskFunc(void* params)
                 struct tm sntpNextSyncTm;
                 sntpNextSync = time(nullptr);
                 localtime_r(&sntpNextSync, &sntpNextSyncTm);
-                sntpNextSyncTm.tm_hour += caller->sntpResyncIntervalHours;
+                // Check status of sync to determine the next sync time
+                if(0 != (events & caller->timeEventTimeSetSntp)) {
+                    ESP_LOGI(caller->logTag, "SNTP time (re)sync was successful.");
+                    sntpNextSyncTm.tm_hour += caller->sntpResyncIntervalHours;
+                } else {
+                    ESP_LOGW(caller->logTag, "SNTP time (re)sync wasn't successful within timeout.");
+                    sntpNextSyncTm.tm_min += caller->sntpResyncIntervalFailMinutes;
+                }
                 sntpNextSync = mktime(&sntpNextSyncTm);
                 TimeSystem_SetNextSntpSync(sntpNextSync);
 

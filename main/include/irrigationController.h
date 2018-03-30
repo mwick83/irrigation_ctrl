@@ -58,7 +58,7 @@ private:
         reservoir_state_t reservoirState;                       /**< State of the reservoir (e.g. RESERVOIR_OK, ...) */
         uint32_t battVoltage;                                   /**< External battery supply voltage in mV. */
         PowerManager::batt_state_t battState;                   /**< State of the battery (e.g. BATT_FULL, BATT_OK, ...) */
-        std::vector<uint32_t> activeOutputs;  /**< Currently active outputs. */
+        std::vector<uint32_t> activeOutputs;                    /**< Currently active outputs. */
         time_t nextIrrigEvent;                                  /**< Next time an irrigation event occurs. */
         time_t sntpLastSync;                                    /**< Last time a time sync via SNTP happened. */
         time_t sntpNextSync;                                    /**< Next time a time sync via SNTP should happen. */
@@ -91,6 +91,7 @@ private:
 
     const int noSntpResyncRangeMillis = 60000;              /**< If an event is this close, don't resync time via SNTP */
     const double sntpResyncIntervalHours = 4;               /**< Time in hours after which a time resync via SNTP should be requested */ // TBD: from config
+    const double sntpResyncIntervalFailMinutes = 10;        /**< Time in minutes after which a time resync via SNTP should be requested in case it failed previously */ // TBD: from config
 
     const bool disableReservoirCheck = true;                /**< Can be set to disable the reservoir check when irrigating */ // TBD: from config
     const bool disableBatteryCheck = false;                 /**< Can be set to disable the battery check when irrigating */ // TBD: from config
