@@ -501,7 +501,7 @@ void IrrigationController::publishStateUpdate(void)
 
     if(0 != stateCmp) {
         if(false == mqttMgr.waitConnected(mqttConnectedWaitMillis)) {
-            ESP_LOGW(logTag, "MQTT manager has no connection after timeout.")
+            ESP_LOGW(logTag, "MQTT manager has no connection after timeout.");
         } else {
             if(!mqttPrepared) {
                 if(ESP_OK == esp_wifi_get_mac(ESP_IF_WIFI_STA, mac_addr)) {
@@ -590,7 +590,7 @@ void IrrigationController::timeSytemEventsHookDispatch(void* param, time_system_
     IrrigationController* controller = (IrrigationController*) param;
 
     if(nullptr == controller) {
-        ESP_LOGE("unkown", "No valid IrrigationController available to dispatch time system events to!")
+        ESP_LOGE("unkown", "No valid IrrigationController available to dispatch time system events to!");
     } else {
         if(0 != events) {
             controller->timeSytemEventHandler(events);

@@ -96,7 +96,7 @@ private:
                             continueProcessing = false;
                         } else if(stat > 0) {
                             if(errQUEUE_FULL == xQueueSendToBack(caller->rxPacketQueue, &(caller->rxBuffer), queueWaitTime)) {
-                                ESP_LOGW(caller->logTag, "Received packet couldn't be queued within timeout. Dropping it.")
+                                ESP_LOGW(caller->logTag, "Received packet couldn't be queued within timeout. Dropping it.");
                             }
                             memset(caller->rxBuffer.data, 0x00, maxPayloadLen);
                             caller->rxBuffer.len = -1;
@@ -313,10 +313,10 @@ public:
 
         procQueueSet = xQueueCreateSet(rxDriverQueueSize+numTxBuffers);
         if(pdPASS != xQueueAddToSet(rxDriverQueue, procQueueSet)) {
-            ESP_LOGE(logTag, "rxDriverQueue couldn't be added to processing queue set!")
+            ESP_LOGE(logTag, "rxDriverQueue couldn't be added to processing queue set!");
         }
         if(pdPASS != xQueueAddToSet(txPacketQueue, procQueueSet)) {
-            ESP_LOGE(logTag, "txPacketQueue couldn't be added to processing queue set!")
+            ESP_LOGE(logTag, "txPacketQueue couldn't be added to processing queue set!");
         }
 
         //taskHandle = xTaskCreateStatic(this->taskFunc, "serial_packetizer_task", taskStackSize, NULL, taskPrio, taskStack, taskBuf);
