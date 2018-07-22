@@ -13,7 +13,7 @@
 #include "nvs_flash.h"
 
 #include "user_config.h"
-#include "mqtt.h"
+#include "mqtt_client.h"
 #include "console.h"
 #include "wifiEvents.h"
 #include "globalComponents.h"
@@ -235,7 +235,7 @@ esp_err_t initialiseMqttMgr(void)
     clientName = (char*) malloc(mqtt_client_id_len+1);
 
     if(nullptr == clientName) ret = ESP_ERR_NO_MEM;
-    if(mqtt_client_id_len > CONFIG_MQTT_MAX_CLIENT_LEN) ret = ESP_ERR_INVALID_ARG;
+    if(mqtt_client_id_len > MQTT_MAX_CLIENT_LEN) ret = ESP_ERR_INVALID_ARG;
 
     if(ESP_OK == ret) {
         ret = esp_wifi_get_mac(ESP_IF_WIFI_STA, mac_addr);
@@ -249,7 +249,11 @@ esp_err_t initialiseMqttMgr(void)
         }
         clientName[mqtt_client_id_len] = 0;
 
-        mqttMgr.init(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS, clientName);
+        bool ssl = false;
+        #if defined(MQTT_SECURITY) && (MQTT_SECURITY == 1)
+        ssl = true;
+        #endif
+        mqttMgr.init(MQTT_HOST, MQTT_PORT, ssl, MQTT_USER, MQTT_PASS, clientName);
     }
 
     if(nullptr != clientName) free(clientName);
