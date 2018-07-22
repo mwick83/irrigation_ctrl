@@ -4,3 +4,6 @@
 [submodule "components/mqtt-manager-esp32"]
 	path = components/mqtt-manager-esp32
 	url = https://github.com/mwick83/mqtt-manager-esp32.git
+[submodule "components/espmqtt"]
+	path = components/espmqtt
+	url = https://github.com/mwick83/espmqtt.git
