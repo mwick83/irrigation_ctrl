@@ -6,7 +6,6 @@
 
 // debug log tags
 static const char* LOG_TAG_WIFI __attribute__((unused)) = "wifi_app";
-static const char* LOG_TAG_MQTT_CB __attribute__((unused)) = "mqtt_cb";
 static const char* LOG_TAG_MAIN_CFG __attribute__((unused)) = "main_cfg";
 
 // debug output config
