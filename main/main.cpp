@@ -21,6 +21,7 @@
 #include "irrigationController.h"
 #include "irrigationPlanner.h"
 #include "iap_https.h"
+#include "cJSON.h"
 
 // ********************************************************************
 // global objects, vars and prototypes
@@ -197,9 +198,40 @@ void mqttOtaCallback(const char* topic, const char* data, int dataLen)
 {
 #ifdef OTA_DEVEL_ENABLE
     if(0 == iap_https_update_in_progress()) {
-        // Check if there's a new firmware image available.
-        ESP_LOGI(LOG_TAG_OTA, "Requesting OTA firmware upgrade.");
-        iap_https_check_now();
+        cJSON* root = cJSON_Parse(data);
+        if(nullptr == root) {
+            ESP_LOGW(LOG_TAG_OTA, "Error parsing JSON OTA request.");
+        } else {
+            bool check = false;
+            cJSON* checkItem = cJSON_GetObjectItem(root, "check");
+            if(nullptr != checkItem) {
+                check = (cJSON_IsTrue(checkItem)) ? true : false;
+                if(check) {
+                    // Check if there's a new firmware image available.
+                    ESP_LOGI(LOG_TAG_OTA, "Requesting OTA firmware upgrade.");
+                    iap_https_check_now();
+
+                    cJSON* checkFalseAck = cJSON_CreateFalse();
+                    cJSON_ReplaceItemInObject(root, "check", checkFalseAck);
+
+                    char* reqResp = nullptr;
+                    reqResp = cJSON_Print(root);
+                    if(nullptr == reqResp) {
+                        ESP_LOGE(LOG_TAG_OTA, "Error preparing request ack.");
+                    } else {
+                        if(MqttManager::ERR_OK != mqttMgr.publish(topic, reqResp, strlen(reqResp), MqttManager::QOS_EXACTLY_ONCE, true)) {
+                            ESP_LOGE(LOG_TAG_OTA, "Error publishing request ack.");
+                        }
+                    }
+                } else {
+                    // check == false -> this is most likely our own ack
+                    ESP_LOGD(LOG_TAG_OTA, "Check request set to false.");
+                }
+            } else {
+                ESP_LOGW(LOG_TAG_OTA, "No valid check request found.");
+            }
+            cJSON_Delete(root);
+        }
     } else {
         ESP_LOGI(LOG_TAG_OTA, "OTA firmware upgrade already in progress. Dropping request.");
     }
