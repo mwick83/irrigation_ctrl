@@ -549,7 +549,7 @@ void IrrigationController::publishStateUpdate(void)
                     state.battVoltage, state.battState, BATT_STATE_TO_STR(state.battState), 
                     state.fillLevel, state.reservoirState, RESERVOIR_STATE_TO_STR(state.reservoirState),
                     activeOutputs, activeOutputsStr, timeStr, sntpLastSyncTimeStr, sntpNextSyncTimeStr);
-                mqttMgr.publish(mqttStateTopic, mqttStateData, actualLen, MqttManager::QOS_EXACTLY_ONCE, false);
+                mqttMgr.publish(mqttStateTopic, mqttStateData, actualLen, MqttManager::QOS_EXACTLY_ONCE, true);
 
                 // Copy the sent state over to lastState, but only if we actually sent it and not in the other cases
                 memcpy(&lastState, &state, sizeof(state_t));
