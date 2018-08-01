@@ -13,13 +13,15 @@
 #include "nvs_flash.h"
 
 #include "user_config.h"
+#include "version.h"
 #include "mqtt_client.h"
 #include "console.h"
 #include "wifiEvents.h"
 #include "globalComponents.h"
 #include "irrigationController.h"
 #include "irrigationPlanner.h"
-
+#include "iap_https.h"
+#include "cJSON.h"
 
 // ********************************************************************
 // global objects, vars and prototypes
@@ -63,6 +65,10 @@ static esp_err_t wifiEventHandler(void *ctx, system_event_t *event)
         default:
             break;
     }
+
+    // delegate events to OTA subsystem
+    iap_https_wifi_sta_event_callback(event);
+
     return ESP_OK;
 }
 
@@ -128,6 +134,104 @@ esp_err_t initializeMqttMgr(void)
     return ret;
 }
 
+// ********************************************************************
+// OTA
+// ********************************************************************
+extern const uint8_t ota_root_ca_cert_pem_start[] asm("_binary_ota_root_ca_cert_pem_start");
+extern const uint8_t ota_root_ca_cert_pem_end[] asm("_binary_ota_root_ca_cert_pem_end");
+extern const uint8_t ota_host_public_key_pem_start[] asm("_binary_ota_host_public_key_pem_start");
+extern const uint8_t ota_host_public_key_pem_end[] asm("_binary_ota_host_public_key_pem_end");
+
+#define MQTT_OTA_UPGRADE_TOPIC_PRE              "whan/ota_upgrade/"
+#define MQTT_OTA_UPGRADE_TOPIC_PRE_LEN          17
+#define MQTT_OTA_UPGRADE_TOPIC_POST_REQ         "/req"
+#define MQTT_OTA_UPGRADE_TOPIC_POST_REQ_LEN     4
+void mqttOtaCallback(const char* topic, int topicLen, const char* data, int dataLen);
+
+static void otaInitialize()
+{
+    static iap_https_config_t ota_config;
+
+    ESP_LOGI(LOG_TAG_OTA, "Initialising OTA firmware updater.");
+
+    ota_config.current_software_version = OTA_VERSION_STRING;
+    ota_config.server_host_name = OTA_HOST;
+    ota_config.server_port = OTA_PORT;
+    strncpy(ota_config.server_metadata_path, OTA_METADATA_FILE, sizeof(ota_config.server_metadata_path) / sizeof(char));
+    bzero(ota_config.server_firmware_path, sizeof(ota_config.server_firmware_path) / sizeof(char));
+    ota_config.server_root_ca_public_key_pem = (const char*) ota_root_ca_cert_pem_start;
+    ota_config.server_root_ca_public_key_pem_len = ota_root_ca_cert_pem_end - ota_root_ca_cert_pem_start;
+    ota_config.peer_public_key_pem = (const char*) ota_host_public_key_pem_start;
+    ota_config.peer_public_key_pem_len = ota_host_public_key_pem_end - ota_host_public_key_pem_start;
+    ota_config.polling_interval_s = OTA_POLLING_INTERVAL_S;
+    ota_config.auto_reboot = OTA_AUTO_REBOOT;
+
+    iap_https_init(&ota_config);
+
+    // subscribe to OTA topic
+    static char otaTopic[MQTT_OTA_UPGRADE_TOPIC_PRE_LEN + MQTT_OTA_UPGRADE_TOPIC_POST_REQ_LEN + 12 + 1];
+    static uint8_t mac_addr[6];
+    int i;
+    esp_err_t ret;
+    
+    ret = esp_wifi_get_mac(ESP_IF_WIFI_STA, mac_addr);
+
+    if(ESP_OK == ret) {
+        memcpy(otaTopic, MQTT_OTA_UPGRADE_TOPIC_PRE, MQTT_OTA_UPGRADE_TOPIC_PRE_LEN);
+        for(i=0; i<6; i++) {
+            sprintf(&otaTopic[MQTT_OTA_UPGRADE_TOPIC_PRE_LEN + i*2], "%02x", mac_addr[i]);
+        }
+        memcpy(&otaTopic[MQTT_OTA_UPGRADE_TOPIC_PRE_LEN + 12], MQTT_OTA_UPGRADE_TOPIC_POST_REQ, MQTT_OTA_UPGRADE_TOPIC_POST_REQ_LEN);
+        otaTopic[MQTT_OTA_UPGRADE_TOPIC_PRE_LEN + MQTT_OTA_UPGRADE_TOPIC_POST_REQ_LEN + 12] = 0;
+        
+        if(MqttManager::ERR_OK != mqttMgr.subscribe(otaTopic, MqttManager::QOS_EXACTLY_ONCE, mqttOtaCallback)) {
+            ESP_LOGW(LOG_TAG_OTA, "Failed to subscribe to OTA topic!");
+        }
+    } else {
+        ESP_LOGW(LOG_TAG_OTA, "Failed to get WiFi MAC address for OTA topic subscription.");
+    }
+}
+
+void mqttOtaCallback(const char* topic, int topicLen, const char* data, int dataLen)
+{
+    if(0 == iap_https_update_in_progress()) {
+        cJSON* root = cJSON_Parse(data);
+        if(nullptr == root) {
+            ESP_LOGW(LOG_TAG_OTA, "Error parsing JSON OTA request.");
+        } else {
+            bool check = false;
+            cJSON* checkItem = cJSON_GetObjectItem(root, "check");
+            if(nullptr != checkItem) {
+                check = (cJSON_IsTrue(checkItem)) ? true : false;
+                if(check) {
+                    // Check if there's a new firmware image available.
+                    ESP_LOGI(LOG_TAG_OTA, "Requesting OTA firmware upgrade.");
+                    iap_https_check_now();
+
+                    char* reqAckTopic = (char*) calloc((topicLen + 1), sizeof(char));
+                    const char* reqAckData = "";
+
+                    if(nullptr == reqAckTopic) {
+                        ESP_LOGE(LOG_TAG_OTA, "Couldn't allocate memory for request ack topic!");
+                    } else {
+                        strncpy(reqAckTopic, topic, topicLen);
+                        if(MqttManager::ERR_OK != mqttMgr.publish(reqAckTopic, reqAckData, strlen(reqAckData), MqttManager::QOS_EXACTLY_ONCE, true)) {
+                            ESP_LOGE(LOG_TAG_OTA, "Error publishing request ack.");
+                        }
+                    }
+                } else {
+                    ESP_LOGD(LOG_TAG_OTA, "Check request set to false.");
+                }
+            } else {
+                // could have been our "ack", so just debug log it.
+                ESP_LOGD(LOG_TAG_OTA, "No valid check request found.");
+            }
+            cJSON_Delete(root);
+        }
+    } else {
+        ESP_LOGI(LOG_TAG_OTA, "OTA firmware upgrade already in progress. Dropping request.");
+    }
+}
 
 // ********************************************************************
 // app_main
@@ -147,6 +251,8 @@ void ConsoleExitHook(void)
 
 extern "C" void app_main()
 {
+    ESP_LOGI("main", "%s starting ...", VERSION_STRING);
+
     // Begin with system init now.
     ESP_ERROR_CHECK( nvs_flash_init() );
 
@@ -156,6 +262,9 @@ extern "C" void app_main()
     // Prepare global mqtt clientName (needed due to lack of named initializers in C99) 
     // and init the manager.
     ESP_ERROR_CHECK( initializeMqttMgr() );
+
+    // Initialize OTA system
+    otaInitialize();
 
     // Start WiFi. Events will start/stop MQTT client
     ESP_ERROR_CHECK( esp_wifi_start() );

@@ -10,6 +10,9 @@ build/
 .tags1
 .vscode/
 unused_code/
-main/include/networkConfig.h
-settings.txt
-doc/html/
+/main/include/networkConfig.h
+/settings.txt
+/doc/html/
+/Makefile.ota.incl
+/main/ota_host_public_key.pem
+/main/ota_root_ca_cert.pem
