@@ -1,4 +1,5 @@
 OTA_DEST_DIR_BASE = /tmp
 OTA_SERVER_DIR = roms/esp32
+OTA_POST_CMD = "/bin/true"
 
 OTA_METADATA_FILE = $(PROJECT_NAME)_meta.txt

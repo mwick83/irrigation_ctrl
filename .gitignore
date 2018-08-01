@@ -13,6 +13,6 @@ unused_code/
 /main/include/networkConfig.h
 /settings.txt
 /doc/html/
-/Makefile.paths.incl
+/Makefile.ota.incl
 /main/ota_host_public_key.pem
 /main/ota_root_ca_cert.pem
