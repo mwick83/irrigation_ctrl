@@ -148,7 +148,7 @@ extern const uint8_t ota_host_public_key_pem_end[] asm("_binary_ota_host_public_
 #define MQTT_OTA_UPGRADE_TOPIC_PRE_LEN          17
 #define MQTT_OTA_UPGRADE_TOPIC_POST_REQ         "/req"
 #define MQTT_OTA_UPGRADE_TOPIC_POST_REQ_LEN     4
-void mqttOtaCallback(const char* topic, const char* data, int dataLen);
+void mqttOtaCallback(const char* topic, int topicLen, const char* data, int dataLen);
 
 static void otaInitialize()
 {
@@ -190,11 +190,11 @@ static void otaInitialize()
             ESP_LOGW(LOG_TAG_OTA, "Failed to subscribe to OTA topic!");
         }
     } else {
-        ESP_LOGW(LOG_TAG_OTA, "Failed to get WiFi MAC address for OTA topic subscription");
+        ESP_LOGW(LOG_TAG_OTA, "Failed to get WiFi MAC address for OTA topic subscription.");
     }
 }
 
-void mqttOtaCallback(const char* topic, const char* data, int dataLen)
+void mqttOtaCallback(const char* topic, int topicLen, const char* data, int dataLen)
 {
 #ifdef OTA_DEVEL_ENABLE
     if(0 == iap_https_update_in_progress()) {
@@ -211,24 +211,23 @@ void mqttOtaCallback(const char* topic, const char* data, int dataLen)
                     ESP_LOGI(LOG_TAG_OTA, "Requesting OTA firmware upgrade.");
                     iap_https_check_now();
 
-                    cJSON* checkFalseAck = cJSON_CreateFalse();
-                    cJSON_ReplaceItemInObject(root, "check", checkFalseAck);
+                    char* reqAckTopic = (char*) calloc((topicLen + 1), sizeof(char));
+                    const char* reqAckData = "";
 
-                    char* reqResp = nullptr;
-                    reqResp = cJSON_Print(root);
-                    if(nullptr == reqResp) {
-                        ESP_LOGE(LOG_TAG_OTA, "Error preparing request ack.");
+                    if(nullptr == reqAckTopic) {
+                        ESP_LOGE(LOG_TAG_OTA, "Couldn't allocate memory for request ack topic!");
                     } else {
-                        if(MqttManager::ERR_OK != mqttMgr.publish(topic, reqResp, strlen(reqResp), MqttManager::QOS_EXACTLY_ONCE, true)) {
+                        strncpy(reqAckTopic, topic, topicLen);
+                        if(MqttManager::ERR_OK != mqttMgr.publish(reqAckTopic, reqAckData, strlen(reqAckData), MqttManager::QOS_EXACTLY_ONCE, true)) {
                             ESP_LOGE(LOG_TAG_OTA, "Error publishing request ack.");
                         }
                     }
                 } else {
-                    // check == false -> this is most likely our own ack
                     ESP_LOGD(LOG_TAG_OTA, "Check request set to false.");
                 }
             } else {
-                ESP_LOGW(LOG_TAG_OTA, "No valid check request found.");
+                // could have been our "ack", so just debug log it.
+                ESP_LOGD(LOG_TAG_OTA, "No valid check request found.");
             }
             cJSON_Delete(root);
         }
