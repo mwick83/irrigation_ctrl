@@ -66,10 +66,8 @@ static esp_err_t wifiEventHandler(void *ctx, system_event_t *event)
             break;
     }
 
-#ifdef OTA_DEVEL_ENABLE
     // delegate events to OTA subsystem
     iap_https_wifi_sta_event_callback(event);
-#endif
 
     return ESP_OK;
 }
@@ -196,7 +194,6 @@ static void otaInitialize()
 
 void mqttOtaCallback(const char* topic, int topicLen, const char* data, int dataLen)
 {
-#ifdef OTA_DEVEL_ENABLE
     if(0 == iap_https_update_in_progress()) {
         cJSON* root = cJSON_Parse(data);
         if(nullptr == root) {
@@ -234,7 +231,6 @@ void mqttOtaCallback(const char* topic, int topicLen, const char* data, int data
     } else {
         ESP_LOGI(LOG_TAG_OTA, "OTA firmware upgrade already in progress. Dropping request.");
     }
-#endif
 }
 
 // ********************************************************************
@@ -265,10 +261,8 @@ extern "C" void app_main()
     // and init the manager.
     ESP_ERROR_CHECK( initializeMqttMgr() );
 
-#ifdef OTA_DEVEL_ENABLE
     // Initialize OTA system
     otaInitialize();
-#endif
 
     // Start WiFi. Events will start/stop MQTT client
     ESP_ERROR_CHECK( esp_wifi_start() );
