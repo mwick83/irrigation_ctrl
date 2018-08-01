@@ -10,3 +10,11 @@ CFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
 CXXFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
 
 COMPONENT_EMBED_TXTFILES := ota_root_ca_cert.pem ota_host_public_key.pem
+
+# override the default build target to touch version.h
+.PHONY: build
+build: update_version $(COMPONENT_LIBRARY)
+
+.PHONY: update_version
+update_version:
+	touch $(COMPONENT_PATH)/include/version.h

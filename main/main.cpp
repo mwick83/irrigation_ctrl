@@ -251,6 +251,8 @@ void ConsoleExitHook(void)
 
 extern "C" void app_main()
 {
+    ESP_LOGI("main", "%s starting ...", VERSION_STRING);
+
     // Begin with system init now.
     ESP_ERROR_CHECK( nvs_flash_init() );
 
