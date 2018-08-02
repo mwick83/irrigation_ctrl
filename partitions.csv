@@ -3,5 +3,6 @@
 nvs,data,nvs,0x9000,16K,
 otadata,data,ota,0xd000,8K,
 phy_init,data,phy,0xf000,4K,
-ota_0,app,ota_0,0x010000,0x1f0000,
-ota_1,app,ota_1,0x210000,0x1f0000,
+ota_0,app,ota_0,0x010000,0x1ec000,
+ota_1,app,ota_1,0x210000,0x1ec000,
+cfg_store,data,spiffs,0x3fc000,16K,
