@@ -51,8 +51,8 @@ static const int battCriticalThresholdMilli = 11900;
 static const int battLowThresholdMilli = 12100;
 static const int battOkThresholdMilli = 13800;
 
-static const int fillLevelMaxVal = 800; /**< Maximum (i.e. completely full) value reported by the fill sensor */
-static const int fillLevelMinVal = 10;  /**< Minimum (i.e. completely empty) value reported by the fill sensor */
+static const int fillLevelMaxVal = 580; /**< Maximum (i.e. completely full) value reported by the fill sensor */
+static const int fillLevelMinVal = 0;  /**< Minimum (i.e. completely empty) value reported by the fill sensor */
 
 static const int fillLevelCriticalThresholdPercent10 = 125;
 static const int fillLevelLowThresholdPercent10 = 250;
