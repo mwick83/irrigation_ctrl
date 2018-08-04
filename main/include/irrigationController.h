@@ -93,7 +93,7 @@ private:
     const double sntpResyncIntervalHours = 4;               /**< Time in hours after which a time resync via SNTP should be requested */ // TBD: from config
     const double sntpResyncIntervalFailMinutes = 10;        /**< Time in minutes after which a time resync via SNTP should be requested in case it failed previously */ // TBD: from config
 
-    const bool disableReservoirCheck = true;                /**< Can be set to disable the reservoir check when irrigating */ // TBD: from config
+    const bool disableReservoirCheck = false;               /**< Can be set to disable the reservoir check when irrigating */ // TBD: from config
     const bool disableBatteryCheck = false;                 /**< Can be set to disable the battery check when irrigating */ // TBD: from config
 
     state_t state;                                          /**< Internal state representation */
