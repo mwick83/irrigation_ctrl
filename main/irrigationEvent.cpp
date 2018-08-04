@@ -9,8 +9,10 @@ IrrigationEvent::IrrigationEvent(void)
     repetitionType = NOT_SET;
     refTime = 0;
 
-    // pre-allocate memory for chCfg
-    chCfg.reserve(chCfgPreAllocElements);
+    eventData.zoneConfig = nullptr;
+    eventData.durationMillis = 1000;
+    eventData.isStart = true;
+    eventData.parentPtr = this;
 }
 
 /**
@@ -20,50 +22,26 @@ IrrigationEvent::~IrrigationEvent(void)
 {
 }
 
-void IrrigationEvent::addChannelConfig(uint32_t chNum, bool switchOn)
+void IrrigationEvent::setZoneConfig(irrigation_zone_cfg_t* cfg)
 {
-    ch_cfg_t cfg;
-
-    cfg.chNum = chNum;
-    cfg.switchOn = switchOn;
-
-    chCfg.push_back(cfg);
+    eventData.zoneConfig = cfg;
 }
 
-unsigned int IrrigationEvent::getChannelConfigSize(void)
+void IrrigationEvent::setDuration(unsigned int secs)
 {
-    return chCfg.size();
+    eventData.durationMillis = secs * 1000;
 }
 
-IrrigationEvent::err_t IrrigationEvent::getChannelConfigInfo(unsigned int num, uint32_t* chNum, bool* switchOn)
+void IrrigationEvent::setStartFlag(bool isStart)
 {
-    if((nullptr == chNum) || (nullptr == switchOn) || (num > chCfg.size())) return ERR_INVALID_PARAM;
-    if(chCfg.size() == 0) return ERR_NO_CH_CFG;
-
-    *chNum = chCfg[num].chNum;
-    *switchOn = chCfg[num].switchOn;
-    return ERR_OK;
+    eventData.isStart = isStart;
 }
 
-/**
- * @brief Get channel configuration for this event.
- * 
- * @param dest Pointer to a vector, which will be populated with the channel configuration.
- * @return IrrigationEvent::err_t
- * @retval ERR_OK on success.
- * @retval ERR_INVALID_PARAM if dest is invalid.
- */
-IrrigationEvent::err_t IrrigationEvent::appendChannelConfig(std::vector<ch_cfg_t>* dest)
+IrrigationEvent::err_t IrrigationEvent::getEventData(irrigation_event_data_t* dest)
 {
     if(nullptr == dest) return ERR_INVALID_PARAM;
 
-    // reserve additional space before copying data over
-    dest->reserve(chCfg.size() + dest->size());
-
-    for(std::vector<ch_cfg_t>::iterator it = chCfg.begin() ; it != chCfg.end(); ++it) {
-        dest->push_back(*it);
-    }
-
+    memcpy(dest, &eventData, sizeof(irrigation_event_data_t));
     return ERR_OK;
 }
 

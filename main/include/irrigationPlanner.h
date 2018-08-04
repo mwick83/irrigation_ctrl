@@ -29,7 +29,7 @@ public:
 
     time_t getNextEventTime(void);
     time_t getNextEventTime(time_t startTime, bool excludeStartTime);
-    err_t getEventChannelConfig(time_t eventTime, std::vector<IrrigationEvent::ch_cfg_t>* dest);
+    err_t getEventData(time_t eventTime, std::vector<IrrigationEvent::irrigation_event_data_t>* dest);
 
 private:
     const char* logTag = "irrig_planner";

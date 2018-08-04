@@ -39,6 +39,10 @@ IrrigationController::IrrigationController(void)
     // Note: hook registration will be performed by the main thread, because the
     // IrrigationPlanner instance will be created before the TimeSystem is initialized.
     timeEvents = xEventGroupCreate();
+
+    if(NULL == timeEvents) {
+        ESP_LOGE(logTag, "timeEvents event group couldn't be created.");
+    }
 }
 
 /**
@@ -56,11 +60,15 @@ IrrigationController::~IrrigationController(void)
  */
 void IrrigationController::start(void)
 {
-    taskHandle = xTaskCreateStatic(taskFunc, "irrig_ctrl_task", taskStackSize, (void*) this, taskPrio, taskStack, &taskBuf);
-    if(NULL != taskHandle) {
-        ESP_LOGI(logTag, "IrrigationController task created. Starting.");
+    if(NULL == timeEvents) {
+        ESP_LOGE(logTag, "Needed resources haven't been allocated. Not starting the task.");
     } else {
-        ESP_LOGE(logTag, "IrrigationController task creation failed!");
+        taskHandle = xTaskCreateStatic(taskFunc, "irrig_ctrl_task", taskStackSize, (void*) this, taskPrio, taskStack, &taskBuf);
+        if(NULL != taskHandle) {
+            ESP_LOGI(logTag, "IrrigationController task created. Starting.");
+        } else {
+            ESP_LOGE(logTag, "IrrigationController task creation failed!");
+        }
     }
 }
 
@@ -252,16 +260,25 @@ void IrrigationController::taskFunc(void* params)
                     eventTm.tm_mday, eventTm.tm_mon+1, 1900+eventTm.tm_year,
                     eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec);
 
-                std::vector<IrrigationEvent::ch_cfg_t> chCfg;
-                irrigPlanner.getEventChannelConfig(nextIrrigEvent, &chCfg);
-                for(std::vector<IrrigationEvent::ch_cfg_t>::iterator chIt = chCfg.begin(); chIt != chCfg.end(); chIt++) {
-                    ESP_LOGI(caller->logTag, "* Channel: %s, state: %s", 
-                        CH_MAP_TO_STR((*chIt).chNum), (*chIt).switchOn ? "ON" : "OFF");
+                std::vector<IrrigationEvent::irrigation_event_data_t> events;
+                irrigPlanner.getEventData(nextIrrigEvent, &events);
+                for(std::vector<IrrigationEvent::irrigation_event_data_t>::iterator evIt = events.begin(); evIt != events.end(); evIt++) {
+                    irrigation_zone_cfg_t* zoneCfg = (*evIt).zoneConfig;
+                    bool isStartEvent = (*evIt).isStart;
+                    unsigned int durationMillis = isStartEvent ? (*evIt).durationMillis : 0;
+                    if(nullptr != zoneCfg) {
+                        for(int i=0; i < irrigationZoneConfigElements; i++) {
+                            if(zoneCfg->chEnabled[i]) {
+                                ESP_LOGI(caller->logTag, "* Channel: %s, state: %s, duration: %d ms, start: %d", 
+                                   CH_MAP_TO_STR(zoneCfg->chNum[i]),
+                                   isStartEvent ? (zoneCfg->chStateStart[i] ? "ON" : "OFF") :
+                                                  (zoneCfg->chStateStop[i] ? "ON" : "OFF"),
+                                   durationMillis, isStartEvent);
+                            }
+                        }
 
-                    // Only enable outputs when preconditions are met; disabling is always okay.
-                    if(irrigOk || !(*chIt).switchOn) {
-                        outputCtrl.setOutput((OutputController::ch_map_t) (*chIt).chNum, (*chIt).switchOn);
-                        caller->updateStateActiveOutputs((*chIt).chNum, (*chIt).switchOn);
+                        // TBD: add disabling event
+                        // caller->setZoneOutputs(irrigOk, zoneCfg, isStartEvent);
                     }
                 }
 
@@ -448,6 +465,21 @@ void IrrigationController::taskFunc(void* params)
 
     ESP_LOGE(caller->logTag, "Task unexpectetly exited! Performing reboot.");
     //pwrMgr->reboot();
+}
+
+void IrrigationController::setZoneOutputs(bool irrigOk, irrigation_zone_cfg_t* zoneCfg, bool start)
+{
+    for(int i=0; i < irrigationZoneConfigElements; i++) {
+        if(zoneCfg->chEnabled[i]) {
+            bool switchOn = start ? !zoneCfg->chStateStart[i] : !zoneCfg->chStateStop[i];
+            OutputController::ch_map_t chNum = zoneCfg->chNum[i];
+            // Only enable outputs when preconditions are met; disabling is always okay.
+            if(irrigOk || switchOn) {
+                outputCtrl.setOutput(chNum, switchOn);
+                updateStateActiveOutputs(chNum, switchOn);
+            }
+        }
+    }
 }
 
 /**
