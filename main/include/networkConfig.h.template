@@ -17,7 +17,6 @@
 #define OTA_HOST "ota.localdomain"
 #define OTA_PORT "8091"
 #define OTA_POLLING_INTERVAL_S 0
-#define OTA_AUTO_REBOOT 1
 
 #ifndef OTA_METADATA_FILE
 #error No OTA_METADATA_FILE specified.
