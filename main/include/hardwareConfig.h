@@ -38,8 +38,10 @@ static const gpio_num_t peripheralExtSupplyGpioNum = GPIO_NUM_25;
 static const int peripheralEnStartupMillis = 5;         /**< Startup time in milliseconds to wait for onboard 
                                                          * peripherals being ready. Dominated by the DCDC:
                                                          * According to datasheet soft-start is 2.1 ms */
-static const int peripheralExtSupplyMillis = 500;       /**< Startup time in milliseconds to wait for external
-                                                         * peripherals being ready. Fill sensors needs ~400 ms. */
+static const int peripheralExtSupplyMillis = 1000;      /**< Startup time in milliseconds to wait for external
+                                                         * peripherals being ready. Fill sensors needs ~400 ms. 
+                                                         * Let it settle a bit more in the hope the readings
+                                                         * get more stable. */
 
 static const gpio_num_t irrigationMainGpioNum = GPIO_NUM_4;
 static const gpio_num_t irrigationAux0GpioNum = GPIO_NUM_27;
