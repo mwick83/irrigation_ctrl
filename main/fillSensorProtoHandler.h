@@ -100,6 +100,9 @@ public:
                             fillLevel = (fillLevelRaw - fillLevelMinVal);
                             fillLevel = fillLevel * 1000 / fillLevelMaxVal;
 
+                            if(fillLevel > 1000) fillLevel = 1000;
+                            if(fillLevel < 0) fillLevel = 0;
+
                             ret = fillLevel;
                             ESP_LOGD(logTag, "Received answer is fill level: %d mm", fillLevelRaw);
                             break;
