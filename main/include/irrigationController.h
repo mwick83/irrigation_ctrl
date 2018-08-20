@@ -85,9 +85,9 @@ private:
     // TBD: Nevertheless, storing lastIrrigEvent in RTC memory would be a good option to really make sure no
     // event will be lost.
     /** Time in milliseconds to wakeup before an event */
-    const int preEventMillis = peripheralEnStartupMillis + peripheralExtSupplyMillis + 1000;
+    const int preEventMillis = peripheralEnStartupMillis + peripheralExtSupplyMillis + 8*100 + 1000; // TBD: 8*100 config options for avg
     /** Time in milliseconds to wakeup before an event in case of deep sleep */
-    const int preEventMillisDeepSleep = wifiConnectedWaitMillis + peripheralEnStartupMillis + peripheralExtSupplyMillis + 1000;
+    const int preEventMillisDeepSleep = wifiConnectedWaitMillis + peripheralEnStartupMillis + peripheralExtSupplyMillis + 8*100 + 1000; // TBD: 8*100 config options for avg
 
     const int noSntpResyncRangeMillis = 60000;              /**< If an event is this close, don't resync time via SNTP */
     const double sntpResyncIntervalHours = 4;               /**< Time in hours after which a time resync via SNTP should be requested */ // TBD: from config
