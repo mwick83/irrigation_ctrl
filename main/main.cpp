@@ -147,6 +147,7 @@ extern const uint8_t ota_host_public_key_pem_end[] asm("_binary_ota_host_public_
 #define MQTT_OTA_UPGRADE_TOPIC_POST_REQ         "/req"
 #define MQTT_OTA_UPGRADE_TOPIC_POST_REQ_LEN     4
 void mqttOtaCallback(const char* topic, int topicLen, const char* data, int dataLen);
+void iapHttpsEventCallback(iap_https_event_t* event);
 
 static void otaInitialize()
 {
@@ -164,7 +165,8 @@ static void otaInitialize()
     ota_config.peer_public_key_pem = (const char*) ota_host_public_key_pem_start;
     ota_config.peer_public_key_pem_len = ota_host_public_key_pem_end - ota_host_public_key_pem_start;
     ota_config.polling_interval_s = OTA_POLLING_INTERVAL_S;
-    ota_config.auto_reboot = OTA_AUTO_REBOOT;
+    ota_config.auto_reboot = 0;
+    ota_config.event_callback = iapHttpsEventCallback;
 
     iap_https_init(&ota_config);
 
@@ -173,7 +175,7 @@ static void otaInitialize()
     static uint8_t mac_addr[6];
     int i;
     esp_err_t ret;
-    
+
     ret = esp_wifi_get_mac(ESP_IF_WIFI_STA, mac_addr);
 
     if(ESP_OK == ret) {
@@ -230,6 +232,35 @@ void mqttOtaCallback(const char* topic, int topicLen, const char* data, int data
         }
     } else {
         ESP_LOGI(LOG_TAG_OTA, "OTA firmware upgrade already in progress. Dropping request.");
+    }
+}
+
+void iapHttpsEventCallback(iap_https_event_t* event)
+{
+    iap_https_event_id_t eventId = event->event_id;
+
+    ESP_LOGD(LOG_TAG_OTA, "IAP_HTTPS_EVENT received: %s (0x%08x)", IAP_HTTPS_EVENT_ID_TO_STR(eventId), eventId);
+
+    switch(eventId) {
+        case IAP_HTTPS_EVENT_CHECK_FOR_UPDATE:
+            pwrMgr.setKeepAwakeForce(true); // signal to power manager that we need to stay awake
+            break;
+
+        case IAP_HTTPS_EVENT_UP_TO_DATE:
+        case IAP_HTTPS_EVENT_UPGRADE_ERROR:
+            pwrMgr.setKeepAwakeForce(false); // signal to power manager that we don't need to stay awake anymore
+            break;
+
+        case IAP_HTTPS_EVENT_UPGRADE_FINISHED:
+            pwrMgr.setKeepAwakeForce(false); // signal to power manager that we don't need to stay awake anymore
+            ESP_LOGI(LOG_TAG_OTA, "Upgrade finished successfully. Automatic re-boot in 2 seconds ...");
+            vTaskDelay(2000 / portTICK_RATE_MS);
+            esp_restart();
+            break;
+
+        default:
+            ESP_LOGW(LOG_TAG_OTA, "Unhandled IAP_HTTPS_EVENT received: %s (0x%08x)", IAP_HTTPS_EVENT_ID_TO_STR(eventId), eventId);
+            break;
     }
 }
 

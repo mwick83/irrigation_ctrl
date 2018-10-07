@@ -145,11 +145,12 @@ bool PowerManager::getPeripheralExtSupply(void)
 
 bool PowerManager::getKeepAwake(void)
 {
-    return (keepAwakeForcedState || (gpio_get_level(keepAwakeGpioNum) == 0)) ? true : false;
+    return (getKeepAwakeForce() || getKeepAwakeIo());
 }
 
 void PowerManager::setKeepAwakeForce(bool en)
 {
+    // TBD: implement with a counting semaphore to support setting by multiple sources?
     keepAwakeForcedState = en;
 }
 
@@ -174,7 +175,7 @@ bool PowerManager::gotoSleep(uint32_t ms)
     esp_err_t err;
     uint64_t sleepUs = ms * 1000;
 
-    if(keepAwakeForcedState || getKeepAwake()) {
+    if(getKeepAwake()) {
         ESP_LOGI(logTag, "gotoSleep requested, but keep awake is set. Not going to sleep.");
     } else {
         // prepare for sleep

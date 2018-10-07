@@ -164,10 +164,10 @@ void IrrigationController::taskFunc(void* params)
 
         // Get fill level of the reservoir, if not disabled.
         if(!caller->disableReservoirCheck) {
-            caller->state.fillLevel = fillSensor.getFillLevel();
-            if(caller->state.fillLevel >= fillLevelLowThreshold) {
+            caller->state.fillLevel = fillSensor.getFillLevel(8, 100);
+            if(caller->state.fillLevel >= fillLevelLowThresholdPercent10) {
                 caller->state.reservoirState = RESERVOIR_OK;
-            } else if (caller->state.fillLevel >= fillLevelCriticalThreshold) {
+            } else if (caller->state.fillLevel >= fillLevelCriticalThresholdPercent10) {
                 caller->state.reservoirState = RESERVOIR_LOW;
             } else {
                 caller->state.reservoirState = RESERVOIR_CRITICAL;

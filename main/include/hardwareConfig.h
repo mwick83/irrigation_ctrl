@@ -38,8 +38,9 @@ static const gpio_num_t peripheralExtSupplyGpioNum = GPIO_NUM_25;
 static const int peripheralEnStartupMillis = 5;         /**< Startup time in milliseconds to wait for onboard 
                                                          * peripherals being ready. Dominated by the DCDC:
                                                          * According to datasheet soft-start is 2.1 ms */
-static const int peripheralExtSupplyMillis = 500;       /**< Startup time in milliseconds to wait for external
-                                                         * peripherals being ready. Fill sensors needs ~400 ms. */
+static const int peripheralExtSupplyMillis = 500 ;      /**< Startup time in milliseconds to wait for external
+                                                         * peripherals being ready. Fill sensors needs ~400 ms.
+                                                         */
 
 static const gpio_num_t irrigationMainGpioNum = GPIO_NUM_4;
 static const gpio_num_t irrigationAux0GpioNum = GPIO_NUM_27;
@@ -51,7 +52,10 @@ static const int battCriticalThresholdMilli = 11900;
 static const int battLowThresholdMilli = 12100;
 static const int battOkThresholdMilli = 13800;
 
-static const int fillLevelCriticalThreshold = 125;
-static const int fillLevelLowThreshold = 250;
+static const int fillLevelMaxVal = 545; /**< Maximum (i.e. completely full) value reported by the fill sensor */
+static const int fillLevelMinVal = 0;  /**< Minimum (i.e. completely empty) value reported by the fill sensor */
+
+static const int fillLevelCriticalThresholdPercent10 = 75;
+static const int fillLevelLowThresholdPercent10 = 250;
 
 #endif /* HARDWARE_CONFIG_H */
