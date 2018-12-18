@@ -7,3 +7,6 @@
 [submodule "components/espmqtt"]
 	path = components/espmqtt
 	url = https://github.com/mwick83/espmqtt.git
+[submodule "components/ota-https-esp32"]
+	path = components/ota-https-esp32
+	url = https://github.com/mwick83/ota-https-esp32.git
