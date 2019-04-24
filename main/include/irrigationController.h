@@ -72,8 +72,8 @@ private:
 
     const int wifiConnectedWaitMillis = 14000;              /**< Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
     const int timeResyncWaitMillis = 2000;                  /**< Timeout in milliseconds to wait for an SNTP time resync */ // TBD: from config
-    const int mqttConnectedWaitMillis = 2000;               /**< Timeout in milliseconds to wait for a MQTT client connection */ // TBD: from config
-    const int mqttAllPublishedWaitMillis = 2000;            /**< Timeout in milliseconds to wait for the MQTT client publishing all messages */ // TBD: from config
+    const int mqttConnectedWaitMillis = 3000;               /**< Timeout in milliseconds to wait for a MQTT client connection */ // TBD: from config
+    const int mqttAllPublishedWaitMillis = 4000;            /**< Timeout in milliseconds to wait for the MQTT client publishing all messages */ // TBD: from config
 
     const int wakeupIntervalMillis = 600000;                /**< Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
     const int wakeupIntervalKeepAwakeMillis = 30000;        /**< Processing task wakeup time in milliseconds when keepawake is active */
