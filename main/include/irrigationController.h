@@ -70,7 +70,7 @@ private:
     StaticTask_t taskBuf;
     TaskHandle_t taskHandle;
 
-    const int wifiConnectedWaitMillis = 14000;              /**< Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
+    const int wifiConnectedWaitMillis = 16000;              /**< Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
     const int timeResyncWaitMillis = 2000;                  /**< Timeout in milliseconds to wait for an SNTP time resync */ // TBD: from config
     const int mqttConnectedWaitMillis = 3000;               /**< Timeout in milliseconds to wait for a MQTT client connection */ // TBD: from config
     const int mqttAllPublishedWaitMillis = 4000;            /**< Timeout in milliseconds to wait for the MQTT client publishing all messages */ // TBD: from config
