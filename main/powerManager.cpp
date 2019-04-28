@@ -179,8 +179,6 @@ bool PowerManager::gotoSleep(uint32_t ms)
         ESP_LOGI(logTag, "gotoSleep requested, but keep awake is set. Not going to sleep.");
     } else {
         // prepare for sleep
-        //esp_wifi_stop(); // ignore return value, because we don't care if WiFi was up before
-
         // TBD: rtc_gpio_isolate for all pulled/driven I/Os for minimal power consumption
         // TBD: setup ext0 wakeup for keepAwake input
 
@@ -205,4 +203,8 @@ bool PowerManager::gotoSleep(uint32_t ms)
     }
 
     return ret;
+}
+
+void PowerManager::reboot(void) {
+    esp_restart();
 }

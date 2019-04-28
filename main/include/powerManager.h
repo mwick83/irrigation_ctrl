@@ -74,6 +74,7 @@ public:
     bool getKeepAwakeAtBoot(void);
 
     bool gotoSleep(uint32_t ms);
+    void reboot(void);
 };
 
 #endif /* POWER_MANAGER_H */

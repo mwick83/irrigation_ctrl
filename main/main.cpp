@@ -255,7 +255,7 @@ void iapHttpsEventCallback(iap_https_event_t* event)
             pwrMgr.setKeepAwakeForce(false); // signal to power manager that we don't need to stay awake anymore
             ESP_LOGI(LOG_TAG_OTA, "Upgrade finished successfully. Automatic re-boot in 2 seconds ...");
             vTaskDelay(2000 / portTICK_RATE_MS);
-            esp_restart();
+            pwrMgr.reboot();
             break;
 
         default:
