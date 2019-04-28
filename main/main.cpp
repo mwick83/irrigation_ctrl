@@ -278,6 +278,10 @@ void ConsoleExitHook(void)
 {
     esp_log_level_set("*", (esp_log_level_t) CONFIG_LOG_DEFAULT_LEVEL);
     // alternaive: esp_log_set_vprintf(previousLogVprintf);
+
+    #if defined(CONFIG_LOG_DEFAULT_LEVEL) && (CONFIG_LOG_DEFAULT_LEVEL > ESP_LOG_INFO)
+    esp_log_level_set("phy_init", ESP_LOG_INFO);
+    #endif
 }
 
 extern "C" void app_main()
