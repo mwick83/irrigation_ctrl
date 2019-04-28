@@ -284,6 +284,11 @@ extern "C" void app_main()
 {
     ESP_LOGI("main", "%s starting ...", VERSION_STRING);
 
+    #if defined(CONFIG_LOG_DEFAULT_LEVEL) && (CONFIG_LOG_DEFAULT_LEVEL > ESP_LOG_INFO)
+    ESP_LOGI("main", "Decreasing phy_init log level to INFO.");
+    esp_log_level_set("phy_init", ESP_LOG_INFO);
+    #endif
+
     // Begin with system init now.
     ESP_ERROR_CHECK( nvs_flash_init() );
 
