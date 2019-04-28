@@ -11,7 +11,7 @@
 
 #include "esp_log.h"
 
-#include "apps/sntp/sntp.h"
+#include "lwip/apps/sntp.h"
 
 #include "wifiEvents.h"
 
