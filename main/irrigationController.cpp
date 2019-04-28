@@ -438,8 +438,28 @@ void IrrigationController::taskFunc(void* params)
                 vTaskDelay(pdMS_TO_TICKS(sleepMillis));
             }
             else {
-                ESP_LOGD(caller->logTag, "Preparing deep sleep for %d ms.", sleepMillis);
-                pwrMgr.gotoSleep(sleepMillis);
+                TickType_t killStartTicks = xTaskGetTickCount();
+
+                ESP_LOGD(caller->logTag, "About to deep sleep. Killing MQTT and WiFi.");
+                mqttMgr.stop();
+                esp_wifi_stop(); // ignore return value, because we don't care if WiFi was up before
+
+                nowTicks = xTaskGetTickCount();
+                loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > killStartTicks) ? 
+                    (nowTicks - killStartTicks) :
+                    (portMAX_DELAY - killStartTicks + nowTicks + 1));
+
+                sleepMillis -= loopRunTimeMillis;
+                ESP_LOGD(caller->logTag, "Kill compensation time %d ms; new deep sleep time %d ms.", \
+                    loopRunTimeMillis, sleepMillis);
+
+                if(sleepMillis < caller->noDeepSleepRangeMillis) {
+                    ESP_LOGW(caller->logTag, "Compensating deep sleep time got too near to next event. Rebooting.");
+                    pwrMgr.reboot();
+                } else {
+                    ESP_LOGD(caller->logTag, "Preparing deep sleep for %d ms.", sleepMillis);
+                    pwrMgr.gotoSleep(sleepMillis);
+                }
             }
         }
     }
