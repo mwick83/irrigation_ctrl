@@ -173,6 +173,7 @@ bool PowerManager::gotoSleep(uint32_t ms)
 {
     bool ret = false;
     esp_err_t err;
+    // TBD: profile the 64bit result multiplication and compensate for it?
     uint64_t sleepUs = ms * 1000;
 
     if(getKeepAwake()) {
@@ -185,6 +186,8 @@ bool PowerManager::gotoSleep(uint32_t ms)
         err = esp_sleep_enable_timer_wakeup(sleepUs);
         if(ESP_OK != err) ESP_LOGE(logTag, "Error setting up deep sleep timer.");
 
+        /*
+        // ESP_PD_OPTION_AUTO is the default for all domains
         if(ESP_OK == err) {
             for(int domCnt=0; domCnt < ESP_PD_DOMAIN_MAX; domCnt++) {
                 err = esp_sleep_pd_config((esp_sleep_pd_domain_t) domCnt, ESP_PD_OPTION_AUTO);
@@ -194,6 +197,7 @@ bool PowerManager::gotoSleep(uint32_t ms)
                 }
             }
         }
+        */
 
         // actually go to sleep
         if(ESP_OK == err) {
