@@ -14,6 +14,8 @@
 #define MQTT_USER               "MQTTUSER"
 #define MQTT_PASS               "MQTTPASSWORD"
 
+const int mqttReconnectTimeoutMs = 1000;
+
 #define OTA_HOST "ota.localdomain"
 #define OTA_PORT "8091"
 #define OTA_POLLING_INTERVAL_S 0

@@ -126,7 +126,7 @@ esp_err_t initializeMqttMgr(void)
         #if defined(MQTT_SECURITY) && (MQTT_SECURITY == 1)
         ssl = true;
         #endif
-        mqttMgr.init(MQTT_HOST, MQTT_PORT, ssl, MQTT_USER, MQTT_PASS, clientName, true);
+        mqttMgr.init(MQTT_HOST, MQTT_PORT, ssl, MQTT_USER, MQTT_PASS, clientName, true, mqttReconnectTimeoutMs);
     }
 
     if(nullptr != clientName) free(clientName);
