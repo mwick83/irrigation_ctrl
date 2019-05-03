@@ -10,7 +10,7 @@ IrrigationEvent::IrrigationEvent(void)
     refTime = 0;
 
     eventData.zoneConfig = nullptr;
-    eventData.durationMillis = 1000;
+    eventData.durationSecs = 1;
     eventData.isStart = true;
     eventData.parentPtr = this;
 }
@@ -29,7 +29,7 @@ void IrrigationEvent::setZoneConfig(irrigation_zone_cfg_t* cfg)
 
 void IrrigationEvent::setDuration(unsigned int secs)
 {
-    eventData.durationMillis = secs * 1000;
+    eventData.durationSecs = secs;
 }
 
 void IrrigationEvent::setStartFlag(bool isStart)
@@ -105,6 +105,16 @@ void IrrigationEvent::updateReferenceTime(time_t ref)
 }
 
 /**
+ * @brief Get the reference time for this event.
+ * 
+ * @return time_t Current reference time.
+ */
+time_t IrrigationEvent::getReferenceTime(void)
+{
+    return refTime;
+}
+
+/**
  * @brief Get the next occurance of this event based on the set reference time.
  * 
  * Note: If an event has exactly the same time as the reference, it will be reported
@@ -158,7 +168,7 @@ time_t IrrigationEvent::getNextOccurance(void) const
  * All operators are based on the event's time info only. The configuration
  * is completetly left out of the decision.
  */
-bool IrrigationEvent::operator==(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator==(const IrrigationEvent& rhs) const
 {
     return (getNextOccurance() == rhs.getNextOccurance());
 }
@@ -166,7 +176,7 @@ bool IrrigationEvent::operator==(const IrrigationEvent &rhs) const
 /**
  * @brief Implementation of the 'in-equality' operator.
  */
-bool IrrigationEvent::operator!=(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator!=(const IrrigationEvent& rhs) const
 {
     return (getNextOccurance() != rhs.getNextOccurance());
 }
@@ -174,7 +184,7 @@ bool IrrigationEvent::operator!=(const IrrigationEvent &rhs) const
 /**
  * @brief Implementation of the 'less than' operator.
  */
-bool IrrigationEvent::operator<(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator<(const IrrigationEvent& rhs) const
 {
     return (getNextOccurance() < rhs.getNextOccurance());
 }
@@ -182,7 +192,7 @@ bool IrrigationEvent::operator<(const IrrigationEvent &rhs) const
 /**
  * @brief Implementation of the 'less than or equal' operator.
  */
-bool IrrigationEvent::operator<=(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator<=(const IrrigationEvent& rhs) const
 {
     return (getNextOccurance() <= rhs.getNextOccurance());
 }
@@ -190,7 +200,7 @@ bool IrrigationEvent::operator<=(const IrrigationEvent &rhs) const
 /**
  * @brief Implementation of the 'greater than' operator.
  */
-bool IrrigationEvent::operator>(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator>(const IrrigationEvent& rhs) const
 {
     return (getNextOccurance() > rhs.getNextOccurance());
 }
@@ -198,7 +208,7 @@ bool IrrigationEvent::operator>(const IrrigationEvent &rhs) const
 /**
  * @brief Implementation of the 'greater than or equal' operator.
  */
-bool IrrigationEvent::operator>=(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator>=(const IrrigationEvent& rhs) const
 {
     return (getNextOccurance() >= rhs.getNextOccurance());
 }

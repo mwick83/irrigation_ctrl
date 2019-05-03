@@ -22,9 +22,9 @@ public:
         ERR_INVALID_PARAM = -2,
     } err_t;
 
-    typedef struct irrigation_event_data_t_ {
+    typedef struct irrigation_event_data_t {
         irrigation_zone_cfg_t* zoneConfig;          /**< Pointer to the associated zone configuration */
-        unsigned int           durationMillis;      /**< Stores the duration the channel configuration shall be kept active */
+        unsigned int           durationSecs;        /**< Stores the duration the channel configuration shall be kept active */
         bool                   isStart;             /**< Wether or not this is an irrigation start event */
         IrrigationEvent*       parentPtr;           /**< Pointer to the parent object containing the event data */
     } irrigation_event_data_t;
@@ -43,14 +43,15 @@ public:
     //void setMonthlyRepetition();
 
     void updateReferenceTime(time_t ref);
+    time_t getReferenceTime(void);
     time_t getNextOccurance(void) const;
 
-    bool operator==(const IrrigationEvent &rhs) const;
-    bool operator!=(const IrrigationEvent &rhs) const;
-    bool operator<(const IrrigationEvent &rhs) const;
-    bool operator<=(const IrrigationEvent &rhs) const;
-    bool operator>(const IrrigationEvent &rhs) const;
-    bool operator>=(const IrrigationEvent &rhs) const;
+    bool operator==(const IrrigationEvent& rhs) const;
+    bool operator!=(const IrrigationEvent& rhs) const;
+    bool operator<(const IrrigationEvent& rhs) const;
+    bool operator<=(const IrrigationEvent& rhs) const;
+    bool operator>(const IrrigationEvent& rhs) const;
+    bool operator>=(const IrrigationEvent& rhs) const;
 
 private:
     typedef enum {

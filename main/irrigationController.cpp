@@ -87,6 +87,7 @@ void IrrigationController::taskFunc(void* params)
     EventBits_t events;
     TickType_t wait, loopStartTicks, nowTicks;
     time_t now, nextIrrigEvent, sntpNextSync;
+    IrrigationPlanner::err_t plannerErr;
     bool irrigOk;
     bool firstRun = true;
 
@@ -256,29 +257,48 @@ void IrrigationController::taskFunc(void* params)
 
                 struct tm eventTm;
                 localtime_r(&nextIrrigEvent, &eventTm);
-                ESP_LOGI(caller->logTag, "Actions to perform for event at %02d.%02d.%04d %02d:%02d:%02d",
+                ESP_LOGI(caller->logTag, "Actions to perform for events at %02d.%02d.%04d %02d:%02d:%02d",
                     eventTm.tm_mday, eventTm.tm_mon+1, 1900+eventTm.tm_year,
                     eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec);
 
-                std::vector<IrrigationEvent::irrigation_event_data_t> events;
-                irrigPlanner.getEventData(nextIrrigEvent, &events);
-                for(std::vector<IrrigationEvent::irrigation_event_data_t>::iterator evIt = events.begin(); evIt != events.end(); evIt++) {
-                    irrigation_zone_cfg_t* zoneCfg = (*evIt).zoneConfig;
-                    bool isStartEvent = (*evIt).isStart;
-                    unsigned int durationMillis = isStartEvent ? (*evIt).durationMillis : 0;
-                    if(nullptr != zoneCfg) {
-                        for(int i=0; i < irrigationZoneConfigElements; i++) {
-                            if(zoneCfg->chEnabled[i]) {
-                                ESP_LOGI(caller->logTag, "* Channel: %s, state: %s, duration: %d ms, start: %d", 
-                                   CH_MAP_TO_STR(zoneCfg->chNum[i]),
-                                   isStartEvent ? (zoneCfg->chStateStart[i] ? "ON" : "OFF") :
-                                                  (zoneCfg->chStateStop[i] ? "ON" : "OFF"),
-                                   durationMillis, isStartEvent);
+                constexpr int maxEventHandles = 8; // TBD: config parameter
+                IrrigationPlanner::event_handle_t eventHandles[maxEventHandles];
+
+                plannerErr = irrigPlanner.getEventHandles(nextIrrigEvent, eventHandles, maxEventHandles);
+                if(IrrigationPlanner::ERR_OK != plannerErr) {
+                    ESP_LOGW(caller->logTag, "Error getting event handles: %d. Trying our best anyway...", plannerErr);
+                }
+                for(int cnt=0; cnt < maxEventHandles; cnt++) {
+                    IrrigationEvent::irrigation_event_data_t eventData;
+                    if(eventHandles[cnt].idx >= 0) {
+                        plannerErr = irrigPlanner.getEventData(eventHandles[cnt], &eventData);
+                        if(IrrigationPlanner::ERR_OK != plannerErr) {
+                            ESP_LOGE(caller->logTag, "Error getting event data: %d. No actions available!", plannerErr);
+                        } else {
+                            irrigation_zone_cfg_t* zoneCfg = eventData.zoneConfig;
+                            bool isStartEvent = eventData.isStart;
+                            unsigned int durationSecs = isStartEvent ? eventData.durationSecs : 0;
+                            if(nullptr != zoneCfg) {
+                                for(int i=0; i < irrigationZoneCfgElements; i++) {
+                                    if(zoneCfg->chEnabled[i]) {
+                                        ESP_LOGI(caller->logTag, "* Channel: %s, state: %s, duration: %d s, start: %d", 
+                                        CH_MAP_TO_STR(zoneCfg->chNum[i]),
+                                        isStartEvent ? (zoneCfg->chStateStart[i] ? "ON" : "OFF") :
+                                                        (zoneCfg->chStateStop[i] ? "ON" : "OFF"),
+                                        durationSecs, isStartEvent);
+                                    }
+                                }
+
+                                plannerErr = irrigPlanner.confirmEvent(eventHandles[cnt]);
+                                if(IrrigationPlanner::ERR_OK != plannerErr) {
+                                    ESP_LOGE(caller->logTag, "Error confirming event: %d. Not performing its actions!", plannerErr);
+                                } else {
+                                    caller->setZoneOutputs(irrigOk, zoneCfg, isStartEvent);
+                                }
                             }
                         }
-
-                        // TBD: add disabling event
-                        // caller->setZoneOutputs(irrigOk, zoneCfg, isStartEvent);
+                    } else {
+                        break;
                     }
                 }
 
@@ -469,12 +489,12 @@ void IrrigationController::taskFunc(void* params)
 
 void IrrigationController::setZoneOutputs(bool irrigOk, irrigation_zone_cfg_t* zoneCfg, bool start)
 {
-    for(int i=0; i < irrigationZoneConfigElements; i++) {
+    for(int i=0; i < irrigationZoneCfgElements; i++) {
         if(zoneCfg->chEnabled[i]) {
-            bool switchOn = start ? !zoneCfg->chStateStart[i] : !zoneCfg->chStateStop[i];
+            bool switchOn = start ? zoneCfg->chStateStart[i] : zoneCfg->chStateStop[i];
             OutputController::ch_map_t chNum = zoneCfg->chNum[i];
             // Only enable outputs when preconditions are met; disabling is always okay.
-            if(irrigOk || switchOn) {
+            if(irrigOk || !switchOn) {
                 outputCtrl.setOutput(chNum, switchOn);
                 updateStateActiveOutputs(chNum, switchOn);
             }
