@@ -168,7 +168,7 @@ int IrrigationPlanner::getNextEventIdx(time_t startTime, IrrigationEvent* eventL
     for(int i=0; i < listElements; i++) {
         if((nullptr != nextEvent) && eventUsedList[i]) {
             eventList[i].updateReferenceTime(startTime);
-            if(eventList[i] < *nextEvent) {
+            if((eventList[i].getNextOccurance() != 0) && (eventList[i] < *nextEvent)) {
                 nextIdx = i;
                 nextEvent = &eventList[i];
 
@@ -179,13 +179,15 @@ int IrrigationPlanner::getNextEventIdx(time_t startTime, IrrigationEvent* eventL
             }
         } else if(eventUsedList[i]) {
             eventList[i].updateReferenceTime(startTime);
-            nextIdx = i;
-            nextEvent = &eventList[i];
+            if(eventList[i].getNextOccurance() != 0) {
+                nextIdx = i;
+                nextEvent = &eventList[i];
 
-            #ifdef IRRIGATION_PLANNER_NEXT_EVENT_DEBUG
-                printEventDetails(nextEvent);
-                ESP_LOGD(logTag, "This is our new candidate!");
-            #endif
+                #ifdef IRRIGATION_PLANNER_NEXT_EVENT_DEBUG
+                    printEventDetails(nextEvent);
+                    ESP_LOGD(logTag, "This is our new candidate!");
+                #endif
+            }
         }
     }
 

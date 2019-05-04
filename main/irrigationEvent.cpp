@@ -186,7 +186,14 @@ bool IrrigationEvent::operator!=(const IrrigationEvent& rhs) const
  */
 bool IrrigationEvent::operator<(const IrrigationEvent& rhs) const
 {
-    return (getNextOccurance() < rhs.getNextOccurance());
+    time_t us_time = getNextOccurance();
+
+    if(us_time != 0) {
+        return (getNextOccurance() < rhs.getNextOccurance());
+    } else {
+        // If we are invalid, report us as greater, because this will interfere the least with irrigation planning
+        return false;
+    }
 }
 
 /**
@@ -194,7 +201,14 @@ bool IrrigationEvent::operator<(const IrrigationEvent& rhs) const
  */
 bool IrrigationEvent::operator<=(const IrrigationEvent& rhs) const
 {
-    return (getNextOccurance() <= rhs.getNextOccurance());
+    time_t us_time = getNextOccurance();
+
+    if(us_time != 0) {
+        return (getNextOccurance() <= rhs.getNextOccurance());
+    } else {
+        // If we are invalid, report us as greater, because this will interfere the least with irrigation planning
+        return false;
+    }
 }
 
 /**
@@ -202,7 +216,14 @@ bool IrrigationEvent::operator<=(const IrrigationEvent& rhs) const
  */
 bool IrrigationEvent::operator>(const IrrigationEvent& rhs) const
 {
-    return (getNextOccurance() > rhs.getNextOccurance());
+    time_t us_time = getNextOccurance();
+
+    if(us_time != 0) {
+        return (getNextOccurance() > rhs.getNextOccurance());
+    } else {
+        // If we are invalid, report us as greater, because this will interfere the least with irrigation planning
+        return true;
+    }
 }
 
 /**
@@ -210,5 +231,12 @@ bool IrrigationEvent::operator>(const IrrigationEvent& rhs) const
  */
 bool IrrigationEvent::operator>=(const IrrigationEvent& rhs) const
 {
-    return (getNextOccurance() >= rhs.getNextOccurance());
+    time_t us_time = getNextOccurance();
+
+    if(us_time != 0) {
+        return (getNextOccurance() >= rhs.getNextOccurance());
+    } else {
+        // If we are invalid, report us as greater, because this will interfere the least with irrigation planning
+        return true;
+    }
 }
