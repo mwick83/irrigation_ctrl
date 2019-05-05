@@ -6,6 +6,8 @@
 #include <ctime>
 #include <vector>
 
+#include "irrigationZoneCfg.h"
+
 /**
  * @brief The IrrigationEvent class is a utility class to represent irrigation events.
  * It is used by the IrrigationPlanner and provides operators for easy event time
@@ -18,22 +20,22 @@ public:
         ERR_OK = 0,
         ERR_INVALID_TIME = -1,
         ERR_INVALID_PARAM = -2,
-        ERR_NO_CH_CFG = -3,
     } err_t;
 
-    /** Channel configuration structure to represent actions to be taken on event occurrence. */
-    typedef struct ch_cfg {
-        uint32_t chNum;     /**< Channel number associated with the action */
-        bool switchOn;      /**< Wether or not to switch the associated channel on */
-    } ch_cfg_t;
+    typedef struct irrigation_event_data_t {
+        irrigation_zone_cfg_t* zoneConfig;          /**< Pointer to the associated zone configuration */
+        unsigned int           durationSecs;        /**< Stores the duration the channel configuration shall be kept active */
+        bool                   isStart;             /**< Wether or not this is an irrigation start event */
+        IrrigationEvent*       parentPtr;           /**< Pointer to the parent object containing the event data */
+    } irrigation_event_data_t;
 
     IrrigationEvent(void);
     ~IrrigationEvent(void);
 
-    void addChannelConfig(uint32_t chNum, bool switchOn);
-    unsigned int getChannelConfigSize(void);
-    err_t getChannelConfigInfo(unsigned int num, uint32_t* chNum, bool* switchOn);
-    err_t appendChannelConfig(std::vector<ch_cfg_t>* dest);
+    void setDuration(unsigned int secs);
+    void setZoneConfig(irrigation_zone_cfg_t* cfg);
+    void setStartFlag(bool isStart);
+    err_t getEventData(irrigation_event_data_t* dest);
 
     err_t setSingleEvent(int hour, int minute, int second, int day, int month, int year);
     err_t setDailyRepetition(int hour, int minute, int second);
@@ -41,14 +43,15 @@ public:
     //void setMonthlyRepetition();
 
     void updateReferenceTime(time_t ref);
+    time_t getReferenceTime(void);
     time_t getNextOccurance(void) const;
 
-    bool operator==(const IrrigationEvent &rhs) const;
-    bool operator!=(const IrrigationEvent &rhs) const;
-    bool operator<(const IrrigationEvent &rhs) const;
-    bool operator<=(const IrrigationEvent &rhs) const;
-    bool operator>(const IrrigationEvent &rhs) const;
-    bool operator>=(const IrrigationEvent &rhs) const;
+    bool operator==(const IrrigationEvent& rhs) const;
+    bool operator!=(const IrrigationEvent& rhs) const;
+    bool operator<(const IrrigationEvent& rhs) const;
+    bool operator<=(const IrrigationEvent& rhs) const;
+    bool operator>(const IrrigationEvent& rhs) const;
+    bool operator>=(const IrrigationEvent& rhs) const;
 
 private:
     typedef enum {
@@ -59,10 +62,8 @@ private:
         MONTHLY = 4,
     } repetition_type_t;
 
-    const int chCfgPreAllocElements = 4;            /**< Number of elements to pre-allocate for the chCfg vector */
-
-    std::vector<ch_cfg_t> chCfg;                    /**< Vector to store channel configurations associated to this event */
     repetition_type_t repetitionType;               /**< Stores the repetition type of this event */
+    irrigation_event_data_t eventData;              /**< Stores associated event data */
     struct tm eventTime;                            /**< Stores the time info of this event. Note: Its fields are only sparsely used. */
 
     time_t refTime;                                 /**< Stores the reference time for time comparisions and the next occurance */

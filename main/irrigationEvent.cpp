@@ -9,8 +9,10 @@ IrrigationEvent::IrrigationEvent(void)
     repetitionType = NOT_SET;
     refTime = 0;
 
-    // pre-allocate memory for chCfg
-    chCfg.reserve(chCfgPreAllocElements);
+    eventData.zoneConfig = nullptr;
+    eventData.durationSecs = 1;
+    eventData.isStart = true;
+    eventData.parentPtr = this;
 }
 
 /**
@@ -20,50 +22,26 @@ IrrigationEvent::~IrrigationEvent(void)
 {
 }
 
-void IrrigationEvent::addChannelConfig(uint32_t chNum, bool switchOn)
+void IrrigationEvent::setZoneConfig(irrigation_zone_cfg_t* cfg)
 {
-    ch_cfg_t cfg;
-
-    cfg.chNum = chNum;
-    cfg.switchOn = switchOn;
-
-    chCfg.push_back(cfg);
+    eventData.zoneConfig = cfg;
 }
 
-unsigned int IrrigationEvent::getChannelConfigSize(void)
+void IrrigationEvent::setDuration(unsigned int secs)
 {
-    return chCfg.size();
+    eventData.durationSecs = secs;
 }
 
-IrrigationEvent::err_t IrrigationEvent::getChannelConfigInfo(unsigned int num, uint32_t* chNum, bool* switchOn)
+void IrrigationEvent::setStartFlag(bool isStart)
 {
-    if((nullptr == chNum) || (nullptr == switchOn) || (num > chCfg.size())) return ERR_INVALID_PARAM;
-    if(chCfg.size() == 0) return ERR_NO_CH_CFG;
-
-    *chNum = chCfg[num].chNum;
-    *switchOn = chCfg[num].switchOn;
-    return ERR_OK;
+    eventData.isStart = isStart;
 }
 
-/**
- * @brief Get channel configuration for this event.
- * 
- * @param dest Pointer to a vector, which will be populated with the channel configuration.
- * @return IrrigationEvent::err_t
- * @retval ERR_OK on success.
- * @retval ERR_INVALID_PARAM if dest is invalid.
- */
-IrrigationEvent::err_t IrrigationEvent::appendChannelConfig(std::vector<ch_cfg_t>* dest)
+IrrigationEvent::err_t IrrigationEvent::getEventData(irrigation_event_data_t* dest)
 {
     if(nullptr == dest) return ERR_INVALID_PARAM;
 
-    // reserve additional space before copying data over
-    dest->reserve(chCfg.size() + dest->size());
-
-    for(std::vector<ch_cfg_t>::iterator it = chCfg.begin() ; it != chCfg.end(); ++it) {
-        dest->push_back(*it);
-    }
-
+    memcpy(dest, &eventData, sizeof(irrigation_event_data_t));
     return ERR_OK;
 }
 
@@ -127,6 +105,16 @@ void IrrigationEvent::updateReferenceTime(time_t ref)
 }
 
 /**
+ * @brief Get the reference time for this event.
+ * 
+ * @return time_t Current reference time.
+ */
+time_t IrrigationEvent::getReferenceTime(void)
+{
+    return refTime;
+}
+
+/**
  * @brief Get the next occurance of this event based on the set reference time.
  * 
  * Note: If an event has exactly the same time as the reference, it will be reported
@@ -180,7 +168,7 @@ time_t IrrigationEvent::getNextOccurance(void) const
  * All operators are based on the event's time info only. The configuration
  * is completetly left out of the decision.
  */
-bool IrrigationEvent::operator==(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator==(const IrrigationEvent& rhs) const
 {
     return (getNextOccurance() == rhs.getNextOccurance());
 }
@@ -188,7 +176,7 @@ bool IrrigationEvent::operator==(const IrrigationEvent &rhs) const
 /**
  * @brief Implementation of the 'in-equality' operator.
  */
-bool IrrigationEvent::operator!=(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator!=(const IrrigationEvent& rhs) const
 {
     return (getNextOccurance() != rhs.getNextOccurance());
 }
@@ -196,31 +184,59 @@ bool IrrigationEvent::operator!=(const IrrigationEvent &rhs) const
 /**
  * @brief Implementation of the 'less than' operator.
  */
-bool IrrigationEvent::operator<(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator<(const IrrigationEvent& rhs) const
 {
-    return (getNextOccurance() < rhs.getNextOccurance());
+    time_t us_time = getNextOccurance();
+
+    if(us_time != 0) {
+        return (getNextOccurance() < rhs.getNextOccurance());
+    } else {
+        // If we are invalid, report us as greater, because this will interfere the least with irrigation planning
+        return false;
+    }
 }
 
 /**
  * @brief Implementation of the 'less than or equal' operator.
  */
-bool IrrigationEvent::operator<=(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator<=(const IrrigationEvent& rhs) const
 {
-    return (getNextOccurance() <= rhs.getNextOccurance());
+    time_t us_time = getNextOccurance();
+
+    if(us_time != 0) {
+        return (getNextOccurance() <= rhs.getNextOccurance());
+    } else {
+        // If we are invalid, report us as greater, because this will interfere the least with irrigation planning
+        return false;
+    }
 }
 
 /**
  * @brief Implementation of the 'greater than' operator.
  */
-bool IrrigationEvent::operator>(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator>(const IrrigationEvent& rhs) const
 {
-    return (getNextOccurance() > rhs.getNextOccurance());
+    time_t us_time = getNextOccurance();
+
+    if(us_time != 0) {
+        return (getNextOccurance() > rhs.getNextOccurance());
+    } else {
+        // If we are invalid, report us as greater, because this will interfere the least with irrigation planning
+        return true;
+    }
 }
 
 /**
  * @brief Implementation of the 'greater than or equal' operator.
  */
-bool IrrigationEvent::operator>=(const IrrigationEvent &rhs) const
+bool IrrigationEvent::operator>=(const IrrigationEvent& rhs) const
 {
-    return (getNextOccurance() >= rhs.getNextOccurance());
+    time_t us_time = getNextOccurance();
+
+    if(us_time != 0) {
+        return (getNextOccurance() >= rhs.getNextOccurance());
+    } else {
+        // If we are invalid, report us as greater, because this will interfere the least with irrigation planning
+        return true;
+    }
 }

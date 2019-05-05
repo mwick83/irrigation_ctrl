@@ -51,7 +51,7 @@ private:
     } reservoir_state_t;
 
     /** Internal state structure used for MQTT updates and persistant storage. */
-    typedef struct {
+    typedef struct state_t_ {
         int32_t fillLevel;                                      /**< Fill level of reservoir in percent multiplied by 10.
                                                                  * Note: Will be -1 if getting the fill level failed.
                                                                  */
@@ -140,6 +140,7 @@ private:
     size_t mqttStateDataMaxLen;
 
     static void taskFunc(void* params);
+    void setZoneOutputs(bool irrigOk, irrigation_zone_cfg_t* zoneCfg, bool start);
     void updateStateActiveOutputs(uint32_t chNum, bool active);
     void publishStateUpdate(void);
 
