@@ -16,6 +16,7 @@
 #include "driver/adc.h"
 #include "esp_adc_cal.h"
 #include "driver/gpio.h"
+#include "driver/rtc_io.h"
 
 #include "user_config.h"
 

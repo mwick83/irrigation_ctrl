@@ -40,6 +40,7 @@ PowerManager::PowerManager(void)
     peripheralExtSupplyMutex = xSemaphoreCreateMutexStatic(&peripheralExtSupplyMutexBuf);
 
     // setup keep awake GPIO and forced state
+    rtc_gpio_deinit(keepAwakeGpioNum); // regain access from RTC IO block
     gpio_set_direction(keepAwakeGpioNum, GPIO_MODE_INPUT);
     gpio_set_pull_mode(keepAwakeGpioNum, GPIO_FLOATING); // board has an external pull
 
@@ -181,7 +182,8 @@ bool PowerManager::gotoSleep(uint32_t ms)
     } else {
         // prepare for sleep
         // TBD: rtc_gpio_isolate for all pulled/driven I/Os for minimal power consumption
-        // TBD: setup ext0 wakeup for keepAwake input
+        // setup ext0 wakeup for keepAwake input
+        esp_sleep_enable_ext0_wakeup(keepAwakeGpioNum, 0);
 
         err = esp_sleep_enable_timer_wakeup(sleepUs);
         if(ESP_OK != err) ESP_LOGE(logTag, "Error setting up deep sleep timer.");
