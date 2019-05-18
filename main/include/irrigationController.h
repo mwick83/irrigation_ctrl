@@ -70,39 +70,66 @@ private:
     StaticTask_t taskBuf;
     TaskHandle_t taskHandle;
 
-    const int wifiConnectedWaitMillis = 16000;              /**< Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
-    const int timeResyncWaitMillis = 2000;                  /**< Timeout in milliseconds to wait for an SNTP time resync */ // TBD: from config
-    const int mqttConnectedWaitMillis = 3000;               /**< Timeout in milliseconds to wait for a MQTT client connection */ // TBD: from config
-    const int mqttAllPublishedWaitMillis = 4000;            /**< Timeout in milliseconds to wait for the MQTT client publishing all messages */ // TBD: from config
+    /** Boottime compensation, due to the fact that the systick gets reset during boot */
+    const int bootCompensationMillis = 1000;
 
-    const int wakeupIntervalMillis = 600000;                /**< Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
-    const int wakeupIntervalKeepAwakeMillis = 30000;        /**< Processing task wakeup time in milliseconds when keepawake is active */
-    const int noDeepSleepRangeMillis = 60000;               /**< If an event is this close, don't go to deep sleep */
+    /** Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
+    const int wifiConnectedWaitMillis = 16000;
+    /** Timeout in milliseconds to wait for an SNTP time resync */ // TBD: from config
+    const int timeResyncWaitMillis = 2000;
+    /** Timeout in milliseconds to wait for a MQTT client connection */ // TBD: from config
+    const int mqttConnectedWaitMillis = 3000;
+    /** Timeout in milliseconds to wait for the MQTT client publishing all messages */ // TBD: from config
+    const int mqttAllPublishedWaitMillis = 4000;
+
+    /** Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
+    const int wakeupIntervalMillis = 600000 - bootCompensationMillis;
+    /** Processing task wakeup time in milliseconds when keepawake is active */
+    const int wakeupIntervalKeepAwakeMillis = 30000;
+    /** If an event is this close, don't go to deep sleep */
+    const int noDeepSleepRangeMillis = 60000;
 
     // In case of deep sleep bare minimum is: peripheralEnStartupMillis + peripheralExtSupplyMillis + wifiConnectedWaitMillis + x
     // This is due to the fact that the lastIrrigEvent time is lost during deep sleep and we need to make sure to reach
     // the initial setup of this variable BEFORE the upcoming event. Otherwise it will be lost.
     // TBD: Nevertheless, storing lastIrrigEvent in RTC memory would be a good option to really make sure no
     // event will be lost.
+    /* fill sesnor: worst case is 5*100 ms poll time * 8 + x */
+    /* battery sensor: ~ 8 * 10 ms + x */
     /** Time in milliseconds to wakeup before an event */
-    const int preEventMillis = peripheralEnStartupMillis + peripheralExtSupplyMillis + 8*100 + 1000; // TBD: 8*100 config options for avg
+    const int sensorBatReadoutTimeMillis = 8*5*100 + 8*10 + 200; // TBD: config option for avg
+    /* Boot time is just an approximation, which includes a reset of the systime during boot */
+    /** Time in milliseconds a boot takes (in case of deep sleep) */
+    const int bootToTaskTimeMillis = 600 + bootCompensationMillis;
+    /** Time in milliseconds to wakeup before an event */
+    const int preEventMillis = peripheralEnStartupMillis + peripheralExtSupplyMillis + sensorBatReadoutTimeMillis + 5000;
     /** Time in milliseconds to wakeup before an event in case of deep sleep */
-    const int preEventMillisDeepSleep = wifiConnectedWaitMillis + peripheralEnStartupMillis + peripheralExtSupplyMillis + 8*100 + 1000; // TBD: 8*100 config options for avg
+    const int preEventMillisDeepSleep = wifiConnectedWaitMillis + peripheralEnStartupMillis + peripheralExtSupplyMillis +
+        sensorBatReadoutTimeMillis + bootToTaskTimeMillis + 5000;
 
-    const int noSntpResyncRangeMillis = 60000;              /**< If an event is this close, don't resync time via SNTP */
-    const double sntpResyncIntervalHours = 4;               /**< Time in hours after which a time resync via SNTP should be requested */ // TBD: from config
-    const double sntpResyncIntervalFailMinutes = 10;        /**< Time in minutes after which a time resync via SNTP should be requested in case it failed previously */ // TBD: from config
+    /** If an event is this close, don't resync time via SNTP */
+    const int noSntpResyncRangeMillis = 60000;
+    /** Time in hours after which a time resync via SNTP should be requested */ // TBD: from config
+    const double sntpResyncIntervalHours = 4;
+    /** Time in minutes after which a time resync via SNTP should be requested in case it failed previously */ // TBD: from config
+    const double sntpResyncIntervalFailMinutes = 10;
 
-    const bool disableReservoirCheck = false;               /**< Can be set to disable the reservoir check when irrigating */ // TBD: from config
-    const bool disableBatteryCheck = false;                 /**< Can be set to disable the battery check when irrigating */ // TBD: from config
+    /** Can be set to disable the reservoir check when irrigating */ // TBD: from config
+    const bool disableReservoirCheck = false;
+    /** Can be set to disable the battery check when irrigating */ // TBD: from config
+    const bool disableBatteryCheck = false;
 
-    state_t state;                                          /**< Internal state representation */
-    state_t lastState;                                      /**< Internal state representation (as sent via MQTT the last time) */
+    /** Internal state representation */
+    state_t state;
+    /** Internal state representation (as sent via MQTT the last time) */
+    state_t lastState;
 
     // MQTT related state/data
     bool mqttPrepared = false;
-    const char* mqttTopicPre = "whan/irrigation/";          /**< MQTT topic prefix part (i.e. the part before the MAC address) */
-    const char* mqttStateTopicPost = "/state";              /**< MQTT topic postfix for state information (i.e. the part after the MAC address) */
+    /** MQTT topic prefix part (i.e. the part before the MAC address) */
+    const char* mqttTopicPre = "whan/irrigation/";
+    /** MQTT topic postfix for state information (i.e. the part after the MAC address) */
+    const char* mqttStateTopicPost = "/state";
 
     /** MQTT state update data format.
      * Needed format specifiers (in this order!):
@@ -125,8 +152,10 @@ private:
         "  \"sntpLastSync\": \"%s\",\n"
         "  \"sntpNextSync\": \"%s\"\n"
         "}";
-    char* mqttStateTopic;                                   /**< @brief Buffer for the state topic. Will be allocated in constructor and freed in the destructor. */
-    char* mqttStateData;                                    /**< @brief Buffer for the state data. Will be allocated in constructor and freed in the destructor. */
+    /** Buffer for the state topic. Will be allocated in constructor and freed in the destructor. */
+    char* mqttStateTopic;
+    /** Buffer for the state data. Will be allocated in constructor and freed in the destructor. */
+    char* mqttStateData;
     /** Maximum allowed length of the state data.
      * Will be determined by the constructor. Assumption: 5 digits for battery voltage (mV),
      * 1 digit for battery state, 8 digits for battery state string,

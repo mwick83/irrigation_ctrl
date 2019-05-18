@@ -458,8 +458,9 @@ void IrrigationController::taskFunc(void* params)
                 ESP_LOGD(caller->logTag, "Loop runtime %d ms.", loopRunTimeMillis);
             }
 
+            int millisTillNextEventCompensated = millisTillNextEvent - caller->preEventMillisDeepSleep - caller->mqttAllPublishedWaitMillis;
             int sleepMillis = caller->wakeupIntervalMillis - loopRunTimeMillis;
-            if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - caller->preEventMillisDeepSleep;
+            if(sleepMillis > millisTillNextEventCompensated) sleepMillis = millisTillNextEventCompensated;
             if(sleepMillis < 500) sleepMillis = 500;
 
             // Check if there is enough wakeup time
