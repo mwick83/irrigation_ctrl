@@ -480,7 +480,7 @@ void IrrigationController::taskFunc(void* params)
 
                 ESP_LOGD(caller->logTag, "About to deep sleep. Killing MQTT and WiFi.");
                 mqttMgr.stop();
-                esp_wifi_stop(); // ignore return value, because we don't care if WiFi was up before
+                // don't stop WiFi explicitly, because this seemed to hang sometimes.
 
                 nowTicks = xTaskGetTickCount();
                 loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > killStartTicks) ? 
