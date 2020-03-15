@@ -12,6 +12,13 @@ include $(IDF_PATH)/make/project.mk
 
 MONITOR_OPTS += --eol CRLF
 
+# # Create a SPIFFS image from the contents of the 'spiffs' directory
+# # that fits the partition named 'cfg_store'. FLASH_IN_PROJECT indicates that
+# # the generated image should be flashed when the entire project is flashed to
+# # the target with 'make flash'. 
+# #SPIFFS_IMAGE_FLASH_IN_PROJECT := 1
+# $(eval $(call spiffs_create_partition_image,cfg_store,spiffs))
+
 .PHONY: doc
 doc:
 	doxygen doc/Doxyfile
