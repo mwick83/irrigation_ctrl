@@ -73,7 +73,7 @@ static esp_err_t wifiEventHandler(void *ctx, system_event_t *event)
     return ESP_OK;
 }
 
-static void initialiseWifi(void)
+static void initializeWifi(void)
 {
     ESP_LOGI(LOG_TAG_WIFI, "Initializing WiFi.");
 
@@ -99,7 +99,7 @@ esp_err_t initializeMqttMgr(void)
 {
     static uint8_t mac_addr[6];
 
-    int ret = ESP_OK;
+    esp_err_t ret = ESP_OK;
 
     int i;
     size_t mqtt_client_id_len;
@@ -150,7 +150,7 @@ extern const uint8_t ota_host_public_key_pem_end[] asm("_binary_ota_host_public_
 void mqttOtaCallback(const char* topic, int topicLen, const char* data, int dataLen);
 void iapHttpsEventCallback(iap_https_event_t* event);
 
-static void otaInitialize()
+static void initializeOta()
 {
     static iap_https_config_t ota_config;
 
@@ -429,7 +429,7 @@ void ConsoleStartHook(void)
 void ConsoleExitHook(void)
 {
     esp_log_level_set("*", (esp_log_level_t) CONFIG_LOG_DEFAULT_LEVEL);
-    // alternaive: esp_log_set_vprintf(previousLogVprintf);
+    // alternative: esp_log_set_vprintf(previousLogVprintf);
 
     #if defined(CONFIG_LOG_DEFAULT_LEVEL) && (CONFIG_LOG_DEFAULT_LEVEL > ESP_LOG_INFO)
     esp_log_level_set("phy_init", ESP_LOG_INFO);
@@ -445,18 +445,16 @@ extern "C" void app_main()
     esp_log_level_set("phy_init", ESP_LOG_INFO);
     #endif
 
-    // Begin with system init now.
     ESP_ERROR_CHECK( nvs_flash_init() );
 
     // Initialize WiFi, but don't start yet.
-    initialiseWifi();
+    initializeWifi();
 
-    // Prepare global mqtt clientName (needed due to lack of named initializers in C99) 
+    // Prepare global mqtt clientName (needed due to lack of named initializers in C99)
     // and init the manager.
     ESP_ERROR_CHECK( initializeMqttMgr() );
 
-    // Initialize OTA system
-    otaInitialize();
+    initializeOta();
 
     // Initialize settings storage including setup of hooks, initial load from file, etc.
     ESP_ERROR_CHECK( initializeSettingsMgr() );
@@ -464,7 +462,6 @@ extern "C" void app_main()
     // Start WiFi. Events will start/stop MQTT client
     ESP_ERROR_CHECK( esp_wifi_start() );
 
-    // Initialize the time system
     TimeSystem_Init();
 
     ConsoleInit(true, ConsoleStartHook, ConsoleExitHook);
