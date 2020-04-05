@@ -1,5 +1,9 @@
 #include "irrigationController.h"
 
+extern "C" {
+    void esp_restart_noos() __attribute__ ((noreturn));
+}
+
 // TBD: encapsulate
 RTC_DATA_ATTR static time_t lastIrrigEvent = 0;
 
@@ -91,6 +95,13 @@ void IrrigationController::taskFunc(void* params)
     bool irrigOk;
     bool firstRun = true;
 
+    caller->emergencyTimerHandle = xTimerCreateStatic("Emergency reboot timer", caller->emergencyTimerTicks,
+        pdFALSE, (void*) 0, emergencyTimerCb, &caller->emergencyTimerBuf);
+
+    if((NULL == caller->emergencyTimerHandle) || (pdPASS != xTimerStart(caller->emergencyTimerHandle, 0))) {
+        ESP_LOGE(caller->logTag, "Emergency reboot timer couldn't be setup. Doing our best without it ...");
+    }
+
     // Wait for WiFi to come up. TBD: make configurable (globally), implement WiFiManager for that
     wait = portMAX_DELAY;
     if(caller->wifiConnectedWaitMillis >= 0) {
@@ -130,6 +141,11 @@ void IrrigationController::taskFunc(void* params)
 
     while(1) {
         loopStartTicks = xTaskGetTickCount();
+
+        // feed the emergency timer
+        if(pdPASS != xTimerReset(caller->emergencyTimerHandle, 10)) {
+            ESP_LOGW(caller->logTag, "Couldn't feed the emergency timer.");
+        }
 
         // *********************
         // Power up needed peripherals, DCDC, ...
@@ -669,4 +685,18 @@ void IrrigationController::timeSytemEventsHookDispatch(void* param, time_system_
             controller->timeSytemEventHandler(events);
         }
     }
+}
+
+
+/**
+ * @brief Emergency reboot timer callback, which will simply reset the device
+ * to get back up in operational state.
+ * 
+ * @param timerHandle Timer handle for identification, unused
+ */
+void IrrigationController::emergencyTimerCb(TimerHandle_t timerHandle)
+{
+    // hardcore reboot, without accessing the power manager in case something
+    // really bad happend.
+    esp_restart_noos();
 }

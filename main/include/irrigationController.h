@@ -89,6 +89,13 @@ private:
     /** If an event is this close, don't go to deep sleep */
     const int noDeepSleepRangeMillis = 60000;
 
+    /** Duration after which the emergency reboot timer will fire  */
+    const int emergencyTimerTicks = pdMS_TO_TICKS(wakeupIntervalKeepAwakeMillis * 2);
+
+    StaticTimer_t emergencyTimerBuf;
+    TimerHandle_t emergencyTimerHandle;
+    static void emergencyTimerCb(TimerHandle_t timerHandle);
+
     // In case of deep sleep bare minimum is: peripheralEnStartupMillis + peripheralExtSupplyMillis + wifiConnectedWaitMillis + x
     // This is due to the fact that the lastIrrigEvent time is lost during deep sleep and we need to make sure to reach
     // the initial setup of this variable BEFORE the upcoming event. Otherwise it will be lost.
