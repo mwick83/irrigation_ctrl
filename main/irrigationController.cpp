@@ -70,7 +70,7 @@ void IrrigationController::start(void)
     if(NULL == timeEvents) {
         ESP_LOGE(logTag, "Needed resources haven't been allocated. Not starting the task.");
     } else {
-        taskHandle = xTaskCreateStatic(taskFunc, "irrig_ctrl_task", taskStackSize, (void*) this, taskPrio, taskStack, &taskBuf);
+        taskHandle = xTaskCreateStatic(taskFuncDispatch, "irrig_ctrl_task", taskStackSize, (void*) this, taskPrio, taskStack, &taskBuf);
         if(NULL != taskHandle) {
             ESP_LOGI(logTag, "IrrigationController task created. Starting.");
         } else {
@@ -80,17 +80,25 @@ void IrrigationController::start(void)
 }
 
 /**
- * @brief This is the IrrigationController processing task.
- * 
- * It implements the control logic of the class. For details see the class description.
+ * @brief This is the IrrigationController processing task dispatcher.
  * 
  * @param params Task parameters. Used to pass in the actual IrrigationController
  * instance the task function is running for.
  */
-void IrrigationController::taskFunc(void* params)
+void IrrigationController::taskFuncDispatch(void* params)
 {
     IrrigationController* caller = (IrrigationController*) params;
 
+    caller->taskFunc();
+}
+
+/**
+ * @brief This is the IrrigationController processing task.
+ * 
+ * It implements the control logic of the class. For details see the class description.
+ */
+void IrrigationController::taskFunc()
+{
     EventBits_t events;
     TickType_t wait, loopStartTicks, nowTicks;
     time_t now, nextIrrigEvent, sntpNextSync;
@@ -98,23 +106,23 @@ void IrrigationController::taskFunc(void* params)
     bool irrigOk;
     bool firstRun = true;
 
-    caller->emergencyTimerHandle = xTimerCreateStatic("Emergency reboot timer", caller->emergencyTimerTicks,
-        pdFALSE, (void*) 0, emergencyTimerCb, &caller->emergencyTimerBuf);
+    emergencyTimerHandle = xTimerCreateStatic("Emergency reboot timer", emergencyTimerTicks,
+        pdFALSE, (void*) 0, emergencyTimerCb, &emergencyTimerBuf);
 
-    if((NULL == caller->emergencyTimerHandle) || (pdPASS != xTimerStart(caller->emergencyTimerHandle, 0))) {
-        ESP_LOGE(caller->logTag, "Emergency reboot timer couldn't be setup. Doing our best without it ...");
+    if((NULL == emergencyTimerHandle) || (pdPASS != xTimerStart(emergencyTimerHandle, 0))) {
+        ESP_LOGE(logTag, "Emergency reboot timer couldn't be setup. Doing our best without it ...");
     }
 
     // Wait for WiFi to come up. TBD: make configurable (globally), implement WiFiManager for that
     wait = portMAX_DELAY;
-    if(caller->wifiConnectedWaitMillis >= 0) {
-        wait = pdMS_TO_TICKS(caller->wifiConnectedWaitMillis);
+    if(wifiConnectedWaitMillis >= 0) {
+        wait = pdMS_TO_TICKS(wifiConnectedWaitMillis);
     }
     events = xEventGroupWaitBits(wifiEvents, wifiEventConnected, pdFALSE, pdTRUE, wait);
     if(0 != (events & wifiEventConnected)) {
-        ESP_LOGD(caller->logTag, "WiFi connected.");
+        ESP_LOGD(logTag, "WiFi connected.");
     } else {
-        ESP_LOGE(caller->logTag, "WiFi didn't come up within timeout!");
+        ESP_LOGE(logTag, "WiFi didn't come up within timeout!");
     }
 
     // Check if we have a valid time
@@ -123,9 +131,9 @@ void IrrigationController::taskFunc(void* params)
         // After setting it here, it will be stored in the RTC, so next time we come up it
         // will not be set to the default again.
         TimeSystem_SetTime(01, 01, 2018, 06, 00, 00);
-        ESP_LOGW(caller->logTag, "Time hasn't been set yet. Setting default time: 2018-01-01, 06:00:00.");
+        ESP_LOGW(logTag, "Time hasn't been set yet. Setting default time: 2018-01-01, 06:00:00.");
     } else {
-        ESP_LOGD(caller->logTag, "Time is already set.");
+        ESP_LOGD(logTag, "Time is already set.");
     }
 
     // Properly initialize some time vars
@@ -140,14 +148,14 @@ void IrrigationController::taskFunc(void* params)
     }
 
     // Register time system hook
-    TimeSystem_RegisterHook(timeSytemEventsHookDispatch, caller);
+    TimeSystem_RegisterHook(timeSytemEventsHookDispatch, this);
 
     while(1) {
         loopStartTicks = xTaskGetTickCount();
 
         // feed the emergency timer
-        if(pdPASS != xTimerReset(caller->emergencyTimerHandle, 10)) {
-            ESP_LOGW(caller->logTag, "Couldn't feed the emergency timer.");
+        if(pdPASS != xTimerReset(emergencyTimerHandle, 10)) {
+            ESP_LOGW(logTag, "Couldn't feed the emergency timer.");
         }
 
         // *********************
@@ -155,15 +163,15 @@ void IrrigationController::taskFunc(void* params)
         // *********************
         // Peripheral enable will power up the DCDC as well as the RS232 driver
         if(!pwrMgr.getPeripheralEnable()) {
-            ESP_LOGD(caller->logTag, "Bringing up DCDC + RS232 driver.");
+            ESP_LOGD(logTag, "Bringing up DCDC + RS232 driver.");
             pwrMgr.setPeripheralEnable(true);
             // Wait for stable onboard peripherals
             vTaskDelay(pdMS_TO_TICKS(peripheralEnStartupMillis));
         }
 
         // Enable external sensor power
-        if((!caller->disableReservoirCheck) && (!pwrMgr.getPeripheralExtSupply())) {
-            ESP_LOGD(caller->logTag, "Powering external sensors.");
+        if((!disableReservoirCheck) && (!pwrMgr.getPeripheralExtSupply())) {
+            ESP_LOGD(logTag, "Powering external sensors.");
             pwrMgr.setPeripheralExtSupply(true);
             // Wait for external sensors to power up properly
             vTaskDelay(pdMS_TO_TICKS(peripheralExtSupplyMillis));
@@ -173,61 +181,61 @@ void IrrigationController::taskFunc(void* params)
         // Fetch sensor data
         // *********************
         // Battery voltage
-        caller->state.battVoltage = pwrMgr.getSupplyVoltageMilli();
-        if(caller->disableBatteryCheck) {
-            caller->state.battState = PowerManager::BATT_DISABLED;
+        state.battVoltage = pwrMgr.getSupplyVoltageMilli();
+        if(disableBatteryCheck) {
+            state.battState = PowerManager::BATT_DISABLED;
         } else {
-            caller->state.battState = pwrMgr.getBatteryState(caller->state.battVoltage);
+            state.battState = pwrMgr.getBatteryState(state.battVoltage);
         }
-        ESP_LOGD(caller->logTag, "Battery voltage: %02.2f V (%s)", roundf(caller->state.battVoltage * 0.1f) * 0.01f,
-            BATT_STATE_TO_STR(caller->state.battState));
+        ESP_LOGD(logTag, "Battery voltage: %02.2f V (%s)", roundf(state.battVoltage * 0.1f) * 0.01f,
+            BATT_STATE_TO_STR(state.battState));
 
         // Get fill level of the reservoir, if not disabled.
-        if(!caller->disableReservoirCheck) {
-            caller->state.fillLevel = fillSensor.getFillLevel(8, 100);
-            caller->state.reservoirState = irrigCtrlPersistentData.reservoirState; // keep previous state by default
+        if(!disableReservoirCheck) {
+            state.fillLevel = fillSensor.getFillLevel(8, 100);
+            state.reservoirState = irrigCtrlPersistentData.reservoirState; // keep previous state by default
 
             if ((irrigCtrlPersistentData.reservoirState == RESERVOIR_OK) ||
                 (irrigCtrlPersistentData.reservoirState == RESERVOIR_DISABLED))
             {
                 // state was okay or disabled before -> update it with the absolute values
-                if(caller->state.fillLevel >= fillLevelLowThresholdPercent10) {
-                    caller->state.reservoirState = RESERVOIR_OK;
-                } else if (caller->state.fillLevel >= fillLevelCriticalThresholdPercent10) {
-                    caller->state.reservoirState = RESERVOIR_LOW;
+                if(state.fillLevel >= fillLevelLowThresholdPercent10) {
+                    state.reservoirState = RESERVOIR_OK;
+                } else if (state.fillLevel >= fillLevelCriticalThresholdPercent10) {
+                    state.reservoirState = RESERVOIR_LOW;
                 } else {
-                    caller->state.reservoirState = RESERVOIR_CRITICAL;
+                    state.reservoirState = RESERVOIR_CRITICAL;
                 }
             } else {
                 // apply appropriate hysteresis if we were critical or low before
                 if (irrigCtrlPersistentData.reservoirState == RESERVOIR_CRITICAL) {
-                    if(caller->state.fillLevel >= (fillLevelLowThresholdPercent10 + fillLevelHysteresisPercent10)) {
-                        caller->state.reservoirState = RESERVOIR_OK;
-                    } else if (caller->state.fillLevel >= (fillLevelCriticalThresholdPercent10 + fillLevelHysteresisPercent10)) {
-                       caller->state.reservoirState = RESERVOIR_LOW;
+                    if(state.fillLevel >= (fillLevelLowThresholdPercent10 + fillLevelHysteresisPercent10)) {
+                        state.reservoirState = RESERVOIR_OK;
+                    } else if (state.fillLevel >= (fillLevelCriticalThresholdPercent10 + fillLevelHysteresisPercent10)) {
+                       state.reservoirState = RESERVOIR_LOW;
                     }
                 } else {
-                    if(caller->state.fillLevel >= (fillLevelLowThresholdPercent10 + fillLevelHysteresisPercent10)) {
-                        caller->state.reservoirState = RESERVOIR_OK;
-                    } else if (caller->state.fillLevel < fillLevelCriticalThresholdPercent10) {
-                       caller->state.reservoirState = RESERVOIR_CRITICAL;
+                    if(state.fillLevel >= (fillLevelLowThresholdPercent10 + fillLevelHysteresisPercent10)) {
+                        state.reservoirState = RESERVOIR_OK;
+                    } else if (state.fillLevel < fillLevelCriticalThresholdPercent10) {
+                       state.reservoirState = RESERVOIR_CRITICAL;
                     }
                 }
             }
         } else {
-            caller->state.fillLevel = -2;
-            caller->state.reservoirState = RESERVOIR_DISABLED;
+            state.fillLevel = -2;
+            state.reservoirState = RESERVOIR_DISABLED;
         }
-        ESP_LOGD(caller->logTag, "Reservoir fill level: %d (%s)", caller->state.fillLevel, 
-            RESERVOIR_STATE_TO_STR(caller->state.reservoirState));
+        ESP_LOGD(logTag, "Reservoir fill level: %d (%s)", state.fillLevel, 
+            RESERVOIR_STATE_TO_STR(state.reservoirState));
 
         // Store updated fill values in persitent data storage
-        irrigCtrlPersistentData.reservoirState = caller->state.reservoirState;
+        irrigCtrlPersistentData.reservoirState = state.reservoirState;
 
         // Power down external supply already. Not needed anymore.
         if(pwrMgr.getPeripheralExtSupply()) {
             pwrMgr.setPeripheralExtSupply(false);
-            ESP_LOGD(caller->logTag, "Sensors powered down.");
+            ESP_LOGD(logTag, "Sensors powered down.");
         }
 
         // TBD: Get weather forecast
@@ -235,16 +243,16 @@ void IrrigationController::taskFunc(void* params)
 
         // Check system preconditions for the irrigation, i.e. battery state and reservoir fill level
         irrigOk = true;
-        if(caller->state.battState == PowerManager::BATT_CRITICAL) {
+        if(state.battState == PowerManager::BATT_CRITICAL) {
             irrigOk = false;
         }
-        if(caller->state.reservoirState == RESERVOIR_CRITICAL) {
+        if(state.reservoirState == RESERVOIR_CRITICAL) {
             irrigOk = false;
         }
 
         // Check if system conditions got critical and outputs are active
         if(outputCtrl.anyOutputsActive() && !irrigOk) {
-            ESP_LOGW(caller->logTag, "Active outputs detected, but system conditions critical! Disabling them for safety.");
+            ESP_LOGW(logTag, "Active outputs detected, but system conditions critical! Disabling them for safety.");
             outputCtrl.disableAllOutputs();
         }
 
@@ -257,9 +265,9 @@ void IrrigationController::taskFunc(void* params)
             now = time(nullptr);
 
             // Check if the system time has been (re)set
-            events = xEventGroupClearBits(caller->timeEvents, caller->timeEventTimeSet | caller->timeEventTimeSetSntp);
-            if(0 != (events & caller->timeEventTimeSet)) {
-                ESP_LOGI(caller->logTag, "Time set detected. Resetting event processing.");
+            events = xEventGroupClearBits(timeEvents, timeEventTimeSet | timeEventTimeSetSntp);
+            if(0 != (events & timeEventTimeSet)) {
+                ESP_LOGI(logTag, "Time set detected. Resetting event processing.");
                 // Recalculate lastIrrigEvent to not process events that haven't really 
                 // happend in-between last time and now.
                 struct tm nowTm;
@@ -269,10 +277,10 @@ void IrrigationController::taskFunc(void* params)
 
                 // Calculate the next SNTP sync only if this was a manual time set event, otherwise
                 // the next sync time has already been set above
-                if(0 == (events & caller->timeEventTimeSetSntp)) {
+                if(0 == (events & timeEventTimeSetSntp)) {
                     struct tm sntpNextSyncTm;
                     localtime_r(&now, &sntpNextSyncTm);
-                    sntpNextSyncTm.tm_hour += caller->sntpResyncIntervalHours;
+                    sntpNextSyncTm.tm_hour += sntpResyncIntervalHours;
                     sntpNextSync = mktime(&sntpNextSyncTm);
                     TimeSystem_SetNextSntpSync(sntpNextSync);
                 }
@@ -282,11 +290,11 @@ void IrrigationController::taskFunc(void* params)
             }
 
             nextIrrigEvent = irrigPlanner.getNextEventTime(irrigCtrlPersistentData.lastIrrigEvent, true);
-            caller->state.nextIrrigEvent = nextIrrigEvent;
+            state.nextIrrigEvent = nextIrrigEvent;
             millisTillNextEvent = (int) round(difftime(nextIrrigEvent, now) * 1000.0);
 
             // // Publish state with the updated next event time
-            // caller->publishStateUpdate();
+            // publishStateUpdate();
 
             // Perform event actions if it is time now
             now = time(nullptr);
@@ -296,12 +304,12 @@ void IrrigationController::taskFunc(void* params)
                 TimeSystem_LogTime();
 
                 if(!irrigOk) {
-                    ESP_LOGE(caller->logTag, "Critical system conditions detected! Dropping irrigation.");
+                    ESP_LOGE(logTag, "Critical system conditions detected! Dropping irrigation.");
                 }
 
                 struct tm eventTm;
                 localtime_r(&nextIrrigEvent, &eventTm);
-                ESP_LOGI(caller->logTag, "Actions to perform for events at %02d.%02d.%04d %02d:%02d:%02d",
+                ESP_LOGI(logTag, "Actions to perform for events at %02d.%02d.%04d %02d:%02d:%02d",
                     eventTm.tm_mday, eventTm.tm_mon+1, 1900+eventTm.tm_year,
                     eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec);
 
@@ -310,14 +318,14 @@ void IrrigationController::taskFunc(void* params)
 
                 plannerErr = irrigPlanner.getEventHandles(nextIrrigEvent, eventHandles, maxEventHandles);
                 if(IrrigationPlanner::ERR_OK != plannerErr) {
-                    ESP_LOGW(caller->logTag, "Error getting event handles: %d. Trying our best anyway...", plannerErr);
+                    ESP_LOGW(logTag, "Error getting event handles: %d. Trying our best anyway...", plannerErr);
                 }
                 for(int cnt=0; cnt < maxEventHandles; cnt++) {
                     IrrigationEvent::irrigation_event_data_t eventData;
                     if(eventHandles[cnt].idx >= 0) {
                         plannerErr = irrigPlanner.getEventData(eventHandles[cnt], &eventData);
                         if(IrrigationPlanner::ERR_OK != plannerErr) {
-                            ESP_LOGE(caller->logTag, "Error getting event data: %d. No actions available!", plannerErr);
+                            ESP_LOGE(logTag, "Error getting event data: %d. No actions available!", plannerErr);
                         } else {
                             irrigation_zone_cfg_t* zoneCfg = eventData.zoneConfig;
                             bool isStartEvent = eventData.isStart;
@@ -325,7 +333,7 @@ void IrrigationController::taskFunc(void* params)
                             if(nullptr != zoneCfg) {
                                 for(int i=0; i < irrigationZoneCfgElements; i++) {
                                     if(zoneCfg->chEnabled[i]) {
-                                        ESP_LOGI(caller->logTag, "* Channel: %s, state: %s, duration: %d s, start: %d", 
+                                        ESP_LOGI(logTag, "* Channel: %s, state: %s, duration: %d s, start: %d", 
                                         CH_MAP_TO_STR(zoneCfg->chNum[i]),
                                         isStartEvent ? (zoneCfg->chStateStart[i] ? "ON" : "OFF") :
                                                         (zoneCfg->chStateStop[i] ? "ON" : "OFF"),
@@ -335,9 +343,9 @@ void IrrigationController::taskFunc(void* params)
 
                                 plannerErr = irrigPlanner.confirmEvent(eventHandles[cnt]);
                                 if(IrrigationPlanner::ERR_OK != plannerErr) {
-                                    ESP_LOGE(caller->logTag, "Error confirming event: %d. Not performing its actions!", plannerErr);
+                                    ESP_LOGE(logTag, "Error confirming event: %d. Not performing its actions!", plannerErr);
                                 } else {
-                                    caller->setZoneOutputs(irrigOk, zoneCfg, isStartEvent);
+                                    setZoneOutputs(irrigOk, zoneCfg, isStartEvent);
                                 }
                             }
                         }
@@ -352,9 +360,9 @@ void IrrigationController::taskFunc(void* params)
             }
 
             // Publish state with the updated next event time + active outputs
-            caller->state.sntpLastSync = TimeSystem_GetLastSntpSync();
-            caller->state.sntpNextSync = TimeSystem_GetNextSntpSync();
-            caller->publishStateUpdate();
+            state.sntpLastSync = TimeSystem_GetLastSntpSync();
+            state.sntpNextSync = TimeSystem_GetNextSntpSync();
+            publishStateUpdate();
         }
 
         // *********************
@@ -367,31 +375,31 @@ void IrrigationController::taskFunc(void* params)
 
             // Skip resync in case an upcoming event is close
             millisTillNextEvent = (int) round(difftime(nextIrrigEvent, time(nullptr)) * 1000.0);
-            if(millisTillNextEvent <= caller->noSntpResyncRangeMillis) {
+            if(millisTillNextEvent <= noSntpResyncRangeMillis) {
                 skipSntpResync = true;
-                ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because next upcoming event is too close.");
+                ESP_LOGD(logTag, "Skipping SNTP (re)sync, because next upcoming event is too close.");
             }
 
             // Skip rsync if we are offline
             events = xEventGroupWaitBits(wifiEvents, wifiEventConnected, pdFALSE, pdTRUE, 0);
             if (0 == (events & wifiEventConnected)) {
                 skipSntpResync = true;
-                ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because we are offline.");
+                ESP_LOGD(logTag, "Skipping SNTP (re)sync, because we are offline.");
             }
 
             // Skip resync if outputs are active, because the new time being set would disable
             // all outputs and they would be turned back on again
             if(outputCtrl.anyOutputsActive()) {
                 skipSntpResync = true;
-                ESP_LOGD(caller->logTag, "Skipping SNTP (re)sync, because outputs are active.");
+                ESP_LOGD(logTag, "Skipping SNTP (re)sync, because outputs are active.");
             }
 
             if(!skipSntpResync) {
-                ESP_LOGI(caller->logTag, "Requesting an SNTP time (re)sync.");
+                ESP_LOGI(logTag, "Requesting an SNTP time (re)sync.");
                 TimeSystem_SntpRequest();
 
                 // Wait for the sync
-                events = xEventGroupWaitBits(caller->timeEvents, caller->timeEventTimeSetSntp, pdTRUE, pdTRUE, pdMS_TO_TICKS(caller->timeResyncWaitMillis));
+                events = xEventGroupWaitBits(timeEvents, timeEventTimeSetSntp, pdTRUE, pdTRUE, pdMS_TO_TICKS(timeResyncWaitMillis));
 
                 // Stop the SNTP background process, so it won't intefere with running irrigations
                 TimeSystem_SntpStop();
@@ -401,19 +409,19 @@ void IrrigationController::taskFunc(void* params)
                 sntpNextSync = time(nullptr);
                 localtime_r(&sntpNextSync, &sntpNextSyncTm);
                 // Check status of sync to determine the next sync time
-                if(0 != (events & caller->timeEventTimeSetSntp)) {
-                    ESP_LOGI(caller->logTag, "SNTP time (re)sync was successful.");
-                    sntpNextSyncTm.tm_hour += caller->sntpResyncIntervalHours;
+                if(0 != (events & timeEventTimeSetSntp)) {
+                    ESP_LOGI(logTag, "SNTP time (re)sync was successful.");
+                    sntpNextSyncTm.tm_hour += sntpResyncIntervalHours;
                 } else {
-                    ESP_LOGW(caller->logTag, "SNTP time (re)sync wasn't successful within timeout.");
-                    sntpNextSyncTm.tm_min += caller->sntpResyncIntervalFailMinutes;
+                    ESP_LOGW(logTag, "SNTP time (re)sync wasn't successful within timeout.");
+                    sntpNextSyncTm.tm_min += sntpResyncIntervalFailMinutes;
                 }
                 sntpNextSync = mktime(&sntpNextSyncTm);
                 TimeSystem_SetNextSntpSync(sntpNextSync);
 
                 // Update SNTP info
-                caller->state.sntpLastSync = TimeSystem_GetLastSntpSync();
-                caller->state.sntpNextSync = TimeSystem_GetNextSntpSync();
+                state.sntpLastSync = TimeSystem_GetLastSntpSync();
+                state.sntpNextSync = TimeSystem_GetNextSntpSync();
             }
         }
 
@@ -424,11 +432,11 @@ void IrrigationController::taskFunc(void* params)
         now = time(nullptr);
 
         // Check if the system time has been (re)set
-        events = xEventGroupClearBits(caller->timeEvents, caller->timeEventTimeSet | caller->timeEventTimeSetSntp);
-        if(0 != (events & caller->timeEventTimeSet)) {
+        events = xEventGroupClearBits(timeEvents, timeEventTimeSet | timeEventTimeSetSntp);
+        if(0 != (events & timeEventTimeSet)) {
             // Recalculate lastIrrigEvent and nextIrrig to not process events that haven't really 
             // happend in-between last time and now.
-            ESP_LOGI(caller->logTag, "Time set detected. Resetting event processing.");
+            ESP_LOGI(logTag, "Time set detected. Resetting event processing.");
             struct tm nowTm;
             localtime_r(&now, &nowTm);
             nowTm.tm_sec--;
@@ -437,10 +445,10 @@ void IrrigationController::taskFunc(void* params)
 
             // Calculate the next SNTP sync only if this was a manual time set event, otherwise
             // the next sync time has already been set above
-            if(0 == (events & caller->timeEventTimeSetSntp)) {
+            if(0 == (events & timeEventTimeSetSntp)) {
                 struct tm sntpNextSyncTm;
                 localtime_r(&now, &sntpNextSyncTm);
-                sntpNextSyncTm.tm_hour += caller->sntpResyncIntervalHours;
+                sntpNextSyncTm.tm_hour += sntpResyncIntervalHours;
                 sntpNextSync = mktime(&sntpNextSyncTm);
                 TimeSystem_SetNextSntpSync(sntpNextSync);
             }
@@ -449,8 +457,8 @@ void IrrigationController::taskFunc(void* params)
             outputCtrl.disableAllOutputs();
 
             // Update next irrigation event and publish (also the new SNTP info set above)
-            caller->state.nextIrrigEvent = nextIrrigEvent;
-            caller->publishStateUpdate();
+            state.nextIrrigEvent = nextIrrigEvent;
+            publishStateUpdate();
         }
 
         millisTillNextEvent = (int) round(difftime(nextIrrigEvent, now) * 1000.0);
@@ -458,7 +466,7 @@ void IrrigationController::taskFunc(void* params)
         // Power down the DCDC if no outputs are active.
         if(!outputCtrl.anyOutputsActive()) {
             pwrMgr.setPeripheralEnable(false);
-            ESP_LOGD(caller->logTag, "DCDC + RS232 driver powered down.");
+            ESP_LOGD(logTag, "DCDC + RS232 driver powered down.");
         }
 
         if(pwrMgr.getKeepAwake()) {
@@ -467,19 +475,19 @@ void IrrigationController::taskFunc(void* params)
             int loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > loopStartTicks) ? 
                 (nowTicks - loopStartTicks) :
                 (portMAX_DELAY - loopStartTicks + nowTicks + 1));
-            ESP_LOGD(caller->logTag, "Loop runtime %d ms.", loopRunTimeMillis);
+            ESP_LOGD(logTag, "Loop runtime %d ms.", loopRunTimeMillis);
             firstRun = false;
 
-            int sleepMillis = caller->wakeupIntervalKeepAwakeMillis - loopRunTimeMillis;
-            if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - caller->preEventMillis;
+            int sleepMillis = wakeupIntervalKeepAwakeMillis - loopRunTimeMillis;
+            if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - preEventMillis;
             if(sleepMillis < 500) sleepMillis = 500;
 
-            ESP_LOGD(caller->logTag, "Task is going to sleep for %d ms.", sleepMillis);
+            ESP_LOGD(logTag, "Task is going to sleep for %d ms.", sleepMillis);
             vTaskDelay(pdMS_TO_TICKS(sleepMillis));
         } else {
             // Wait to get all updates through
-            if(!mqttMgr.waitAllPublished(caller->mqttAllPublishedWaitMillis)) {
-                ESP_LOGW(caller->logTag, "Waiting for MQTT to publish all messages didn't complete within timeout.");
+            if(!mqttMgr.waitAllPublished(mqttAllPublishedWaitMillis)) {
+                ESP_LOGW(logTag, "Waiting for MQTT to publish all messages didn't complete within timeout.");
             }
 
             // TBD: stop webserver, mqtt and other stuff
@@ -491,7 +499,7 @@ void IrrigationController::taskFunc(void* params)
                 // boot time.
                 loopRunTimeMillis = portTICK_RATE_MS * xTaskGetTickCount();
                 firstRun = false;
-                ESP_LOGD(caller->logTag, "Loop runtime (incl. boot) %d ms.", loopRunTimeMillis);
+                ESP_LOGD(logTag, "Loop runtime (incl. boot) %d ms.", loopRunTimeMillis);
             } else {
                 // This is the case when the system was in keep awake, previously. So,
                 // compensate for the loop time only.
@@ -499,30 +507,30 @@ void IrrigationController::taskFunc(void* params)
                 loopRunTimeMillis = portTICK_RATE_MS * ((nowTicks > loopStartTicks) ? 
                     (nowTicks - loopStartTicks) :
                     (portMAX_DELAY - loopStartTicks + nowTicks + 1));
-                ESP_LOGD(caller->logTag, "Loop runtime %d ms.", loopRunTimeMillis);
+                ESP_LOGD(logTag, "Loop runtime %d ms.", loopRunTimeMillis);
             }
 
-            int millisTillNextEventCompensated = millisTillNextEvent - caller->preEventMillisDeepSleep - caller->mqttAllPublishedWaitMillis;
-            int sleepMillis = caller->wakeupIntervalMillis - loopRunTimeMillis;
+            int millisTillNextEventCompensated = millisTillNextEvent - preEventMillisDeepSleep - mqttAllPublishedWaitMillis;
+            int sleepMillis = wakeupIntervalMillis - loopRunTimeMillis;
             if(sleepMillis > millisTillNextEventCompensated) sleepMillis = millisTillNextEventCompensated;
             if(sleepMillis < 500) sleepMillis = 500;
 
             // Check if there is enough wakeup time
-            if( (sleepMillis < caller->noDeepSleepRangeMillis) && 
-                (millisTillNextEvent <= caller->noDeepSleepRangeMillis) ) {
-                ESP_LOGD(caller->logTag, "Event coming up sooner than deep sleep wakeup time. "
+            if( (sleepMillis < noDeepSleepRangeMillis) && 
+                (millisTillNextEvent <= noDeepSleepRangeMillis) ) {
+                ESP_LOGD(logTag, "Event coming up sooner than deep sleep wakeup time. "
                     "Task is going to sleep for %d ms insted of deep sleep.", sleepMillis);
                 vTaskDelay(pdMS_TO_TICKS(sleepMillis));
             }
             // Check if any outputs are active, deep sleep would kill them!
             else if(outputCtrl.anyOutputsActive()) {
-                ESP_LOGD(caller->logTag, "Outputs active. Task is going to sleep for %d ms insted of deep sleep.", sleepMillis);
+                ESP_LOGD(logTag, "Outputs active. Task is going to sleep for %d ms insted of deep sleep.", sleepMillis);
                 vTaskDelay(pdMS_TO_TICKS(sleepMillis));
             }
             else {
                 TickType_t killStartTicks = xTaskGetTickCount();
 
-                ESP_LOGD(caller->logTag, "About to deep sleep. Killing MQTT and WiFi.");
+                ESP_LOGD(logTag, "About to deep sleep. Killing MQTT and WiFi.");
                 mqttMgr.stop();
                 // don't stop WiFi explicitly, because this seemed to hang sometimes.
 
@@ -532,14 +540,14 @@ void IrrigationController::taskFunc(void* params)
                     (portMAX_DELAY - killStartTicks + nowTicks + 1));
 
                 sleepMillis -= loopRunTimeMillis;
-                ESP_LOGD(caller->logTag, "Kill compensation time %d ms; new deep sleep time %d ms.", \
+                ESP_LOGD(logTag, "Kill compensation time %d ms; new deep sleep time %d ms.", \
                     loopRunTimeMillis, sleepMillis);
 
-                if(sleepMillis < caller->noDeepSleepRangeMillis) {
-                    ESP_LOGW(caller->logTag, "Compensating deep sleep time got too near to next event. Rebooting.");
+                if(sleepMillis < noDeepSleepRangeMillis) {
+                    ESP_LOGW(logTag, "Compensating deep sleep time got too near to next event. Rebooting.");
                     pwrMgr.reboot();
                 } else {
-                    ESP_LOGD(caller->logTag, "Preparing deep sleep for %d ms.", sleepMillis);
+                    ESP_LOGD(logTag, "Preparing deep sleep for %d ms.", sleepMillis);
                     pwrMgr.gotoSleep(sleepMillis);
                 }
             }
@@ -548,7 +556,7 @@ void IrrigationController::taskFunc(void* params)
 
     vTaskDelete(NULL);
 
-    ESP_LOGE(caller->logTag, "Task unexpectetly exited! Performing reboot.");
+    ESP_LOGE(logTag, "Task unexpectetly exited! Performing reboot.");
     //pwrMgr->reboot();
 }
 
@@ -602,7 +610,7 @@ void IrrigationController::updateStateActiveOutputs(uint32_t chNum, bool active)
 /**
  * @brief Publish currently stored state via MQTT.
  */
-void IrrigationController::publishStateUpdate(void)
+void IrrigationController::publishStateUpdate()
 {
     static uint8_t mac_addr[6];
     static char timeStr[20];

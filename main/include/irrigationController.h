@@ -186,10 +186,11 @@ private:
      * 19 digits for the last SNTP sync datetime. */
     size_t mqttStateDataMaxLen;
 
-    static void taskFunc(void* params);
+    static void taskFuncDispatch(void* params);
+    void taskFunc();
     void setZoneOutputs(bool irrigOk, irrigation_zone_cfg_t* zoneCfg, bool start);
     void updateStateActiveOutputs(uint32_t chNum, bool active);
-    void publishStateUpdate(void);
+    void publishStateUpdate();
 
     static void timeSytemEventsHookDispatch(void* param, time_system_event_t events);
     void timeSytemEventHandler(time_system_event_t events);
