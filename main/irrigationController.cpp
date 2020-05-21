@@ -5,7 +5,10 @@ extern "C" {
 }
 
 // TBD: encapsulate
-RTC_DATA_ATTR static time_t lastIrrigEvent = 0;
+RTC_DATA_ATTR static IrrigationController::peristent_data_t irrigCtrlPersistentData = {
+    .lastIrrigEvent = 0,
+    .reservoirState = RESERVOIR_OK
+};
 
 /**
  * @brief Default constructor, which performs basic initialization,
@@ -128,11 +131,11 @@ void IrrigationController::taskFunc(void* params)
     // Properly initialize some time vars
     {
         now = time(nullptr);
-        if(lastIrrigEvent == 0) {
+        if(irrigCtrlPersistentData.lastIrrigEvent == 0) {
             struct tm nowTm;
             localtime_r(&now, &nowTm);
             nowTm.tm_sec--;
-            lastIrrigEvent = mktime(&nowTm);
+            irrigCtrlPersistentData.lastIrrigEvent = mktime(&nowTm);
         }
     }
 
@@ -237,7 +240,7 @@ void IrrigationController::taskFunc(void* params)
                 struct tm nowTm;
                 localtime_r(&now, &nowTm);
                 nowTm.tm_sec--;
-                lastIrrigEvent = mktime(&nowTm);
+                irrigCtrlPersistentData.lastIrrigEvent = mktime(&nowTm);
 
                 // Calculate the next SNTP sync only if this was a manual time set event, otherwise
                 // the next sync time has already been set above
@@ -253,7 +256,7 @@ void IrrigationController::taskFunc(void* params)
                 outputCtrl.disableAllOutputs();
             }
 
-            nextIrrigEvent = irrigPlanner.getNextEventTime(lastIrrigEvent, true);
+            nextIrrigEvent = irrigPlanner.getNextEventTime(irrigCtrlPersistentData.lastIrrigEvent, true);
             caller->state.nextIrrigEvent = nextIrrigEvent;
             millisTillNextEvent = (int) round(difftime(nextIrrigEvent, now) * 1000.0);
 
@@ -318,7 +321,7 @@ void IrrigationController::taskFunc(void* params)
                     }
                 }
 
-                lastIrrigEvent = nextIrrigEvent;
+                irrigCtrlPersistentData.lastIrrigEvent = nextIrrigEvent;
             } else {
                 eventsToProcess = false;
             }
@@ -404,8 +407,8 @@ void IrrigationController::taskFunc(void* params)
             struct tm nowTm;
             localtime_r(&now, &nowTm);
             nowTm.tm_sec--;
-            lastIrrigEvent = mktime(&nowTm);
-            nextIrrigEvent = irrigPlanner.getNextEventTime(lastIrrigEvent, true);
+            irrigCtrlPersistentData.lastIrrigEvent = mktime(&nowTm);
+            nextIrrigEvent = irrigPlanner.getNextEventTime(irrigCtrlPersistentData.lastIrrigEvent, true);
 
             // Calculate the next SNTP sync only if this was a manual time set event, otherwise
             // the next sync time has already been set above

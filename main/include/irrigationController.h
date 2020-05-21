@@ -50,6 +50,11 @@ private:
         RESERVOIR_DISABLED = 3
     } reservoir_state_t;
 
+    typedef struct peristent_data_t {
+        time_t lastIrrigEvent;
+        reservoir_state_t reservoirState;
+    } peristent_data_t;
+
     /** Internal state structure used for MQTT updates and persistant storage. */
     typedef struct state_t_ {
         int32_t fillLevel;                                      /**< Fill level of reservoir in percent multiplied by 10.
