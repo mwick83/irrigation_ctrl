@@ -7,7 +7,7 @@ extern "C" {
 // TBD: encapsulate
 RTC_DATA_ATTR static IrrigationController::peristent_data_t irrigCtrlPersistentData = {
     .lastIrrigEvent = 0,
-    .reservoirState = RESERVOIR_OK
+    .reservoirState = IrrigationController::RESERVOIR_OK
 };
 
 /**
@@ -185,12 +185,34 @@ void IrrigationController::taskFunc(void* params)
         // Get fill level of the reservoir, if not disabled.
         if(!caller->disableReservoirCheck) {
             caller->state.fillLevel = fillSensor.getFillLevel(8, 100);
-            if(caller->state.fillLevel >= fillLevelLowThresholdPercent10) {
-                caller->state.reservoirState = RESERVOIR_OK;
-            } else if (caller->state.fillLevel >= fillLevelCriticalThresholdPercent10) {
-                caller->state.reservoirState = RESERVOIR_LOW;
+            caller->state.reservoirState = irrigCtrlPersistentData.reservoirState; // keep previous state by default
+
+            if ((irrigCtrlPersistentData.reservoirState == RESERVOIR_OK) ||
+                (irrigCtrlPersistentData.reservoirState == RESERVOIR_DISABLED))
+            {
+                // state was okay or disabled before -> update it with the absolute values
+                if(caller->state.fillLevel >= fillLevelLowThresholdPercent10) {
+                    caller->state.reservoirState = RESERVOIR_OK;
+                } else if (caller->state.fillLevel >= fillLevelCriticalThresholdPercent10) {
+                    caller->state.reservoirState = RESERVOIR_LOW;
+                } else {
+                    caller->state.reservoirState = RESERVOIR_CRITICAL;
+                }
             } else {
-                caller->state.reservoirState = RESERVOIR_CRITICAL;
+                // apply appropriate hysteresis if we were critical or low before
+                if (irrigCtrlPersistentData.reservoirState == RESERVOIR_CRITICAL) {
+                    if(caller->state.fillLevel >= (fillLevelLowThresholdPercent10 + fillLevelHysteresisPercent10)) {
+                        caller->state.reservoirState = RESERVOIR_OK;
+                    } else if (caller->state.fillLevel >= (fillLevelCriticalThresholdPercent10 + fillLevelHysteresisPercent10)) {
+                       caller->state.reservoirState = RESERVOIR_LOW;
+                    }
+                } else {
+                    if(caller->state.fillLevel >= (fillLevelLowThresholdPercent10 + fillLevelHysteresisPercent10)) {
+                        caller->state.reservoirState = RESERVOIR_OK;
+                    } else if (caller->state.fillLevel < fillLevelCriticalThresholdPercent10) {
+                       caller->state.reservoirState = RESERVOIR_CRITICAL;
+                    }
+                }
             }
         } else {
             caller->state.fillLevel = -2;
@@ -198,6 +220,9 @@ void IrrigationController::taskFunc(void* params)
         }
         ESP_LOGD(caller->logTag, "Reservoir fill level: %d (%s)", caller->state.fillLevel, 
             RESERVOIR_STATE_TO_STR(caller->state.reservoirState));
+
+        // Store updated fill values in persitent data storage
+        irrigCtrlPersistentData.reservoirState = caller->state.reservoirState;
 
         // Power down external supply already. Not needed anymore.
         if(pwrMgr.getPeripheralExtSupply()) {

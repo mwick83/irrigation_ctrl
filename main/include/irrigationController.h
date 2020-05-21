@@ -40,9 +40,7 @@
  */
 class IrrigationController
 {
-private:
-    const char* logTag = "irrig_ctrl";
-
+public:
     typedef enum {
         RESERVOIR_OK = 0,
         RESERVOIR_LOW = 1,
@@ -54,6 +52,14 @@ private:
         time_t lastIrrigEvent;
         reservoir_state_t reservoirState;
     } peristent_data_t;
+
+    IrrigationController(void);
+    ~IrrigationController(void);
+
+    void start(void);
+
+private:
+    const char* logTag = "irrig_ctrl";
 
     /** Internal state structure used for MQTT updates and persistant storage. */
     typedef struct state_t_ {
@@ -191,12 +197,6 @@ private:
     EventGroupHandle_t timeEvents;
     const int timeEventTimeSet = (1<<0);
     const int timeEventTimeSetSntp = (1<<1);
-
-public:
-    IrrigationController(void);
-    ~IrrigationController(void);
-
-    void start(void);
 };
 
 #endif /* IRRIGATION_CONTROLLER_H */

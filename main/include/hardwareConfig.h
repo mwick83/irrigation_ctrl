@@ -58,4 +58,6 @@ static const int fillLevelMinVal = 0;  /**< Minimum (i.e. completely empty) valu
 static const int fillLevelCriticalThresholdPercent10 = 75;
 static const int fillLevelLowThresholdPercent10 = 250;
 
+static const int fillLevelHysteresisPercent10 = 50;
+
 #endif /* HARDWARE_CONFIG_H */
