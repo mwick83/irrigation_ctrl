@@ -29,19 +29,19 @@ IrrigationPlanner::IrrigationPlanner(void)
     // Setup fixed zones
     strncpy(zones[0].name, "MAIN", irrigationZoneCfgNameLen);
     zones[0].chEnabled[0] = true;
-    zones[0].chNum[0] = {OutputController::CH_MAIN, },
+    zones[0].chNum[0] = OutputController::CH_MAIN;
     zones[0].chStateStart[0] = true;
     zones[0].chStateStop[0] = false;
 
     strncpy(zones[1].name, "AUX0", irrigationZoneCfgNameLen);
     zones[1].chEnabled[0] = true;
-    zones[1].chNum[0] = {OutputController::CH_AUX0, },
+    zones[1].chNum[0] = OutputController::CH_AUX0;
     zones[1].chStateStart[0] = true;
     zones[1].chStateStop[0] = false;
 
     strncpy(zones[2].name, "AUX1", irrigationZoneCfgNameLen);
     zones[2].chEnabled[0] = true;
-    zones[2].chNum[0] = {OutputController::CH_AUX1, },
+    zones[2].chNum[0] = OutputController::CH_AUX1;
     zones[2].chStateStart[0] = true;
     zones[2].chStateStop[0] = false;
 
