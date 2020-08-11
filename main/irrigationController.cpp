@@ -483,6 +483,11 @@ void IrrigationController::taskFunc()
             if(sleepMillis < 500) sleepMillis = 500;
 
             ESP_LOGD(logTag, "Task is going to sleep for %d ms.", sleepMillis);
+            if(sleepMillis > taskMaxSleepTimeMillis) {
+                sleepMillis = taskMaxSleepTimeMillis;
+                ESP_LOGD(logTag, "Task sleep time longer than maximum allowed. "
+                    "Task is going to sleep for %d ms insted.", sleepMillis);
+            }
             vTaskDelay(pdMS_TO_TICKS(sleepMillis));
         } else {
             // Wait to get all updates through
@@ -520,11 +525,21 @@ void IrrigationController::taskFunc()
                 (millisTillNextEvent <= noDeepSleepRangeMillis) ) {
                 ESP_LOGD(logTag, "Event coming up sooner than deep sleep wakeup time. "
                     "Task is going to sleep for %d ms insted of deep sleep.", sleepMillis);
+                if(sleepMillis > taskMaxSleepTimeMillis) {
+                    sleepMillis = taskMaxSleepTimeMillis;
+                    ESP_LOGD(logTag, "Task sleep time is bigger than maximum allowed. "
+                        "Task is going to sleep for %d ms insted.", sleepMillis);
+                }
                 vTaskDelay(pdMS_TO_TICKS(sleepMillis));
             }
             // Check if any outputs are active, deep sleep would kill them!
             else if(outputCtrl.anyOutputsActive()) {
                 ESP_LOGD(logTag, "Outputs active. Task is going to sleep for %d ms insted of deep sleep.", sleepMillis);
+                if(sleepMillis > taskMaxSleepTimeMillis) {
+                    sleepMillis = taskMaxSleepTimeMillis;
+                    ESP_LOGD(logTag, "Task sleep time is bigger than maximum allowed. "
+                        "Task is going to sleep for %d ms insted.", sleepMillis);
+                }
                 vTaskDelay(pdMS_TO_TICKS(sleepMillis));
             }
             else {

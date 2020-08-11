@@ -100,8 +100,10 @@ private:
     /** If an event is this close, don't go to deep sleep */
     const int noDeepSleepRangeMillis = 60000;
 
-    /** Duration after which the emergency reboot timer will fire  */
-    const int emergencyTimerTicks = pdMS_TO_TICKS(wakeupIntervalKeepAwakeMillis * 2);
+    /** Nominal max task sleep time the emergency timer is based on */
+    const int taskMaxSleepTimeMillis = wakeupIntervalKeepAwakeMillis;
+    /** Duration after which the emergency reboot timer will fire */
+    const int emergencyTimerTicks = pdMS_TO_TICKS(taskMaxSleepTimeMillis * 2);
 
     StaticTimer_t emergencyTimerBuf;
     TimerHandle_t emergencyTimerHandle;
