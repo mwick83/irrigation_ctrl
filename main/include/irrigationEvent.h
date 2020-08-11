@@ -23,17 +23,17 @@ public:
     } err_t;
 
     typedef struct irrigation_event_data_t {
-        irrigation_zone_cfg_t* zoneConfig;          /**< Pointer to the associated zone configuration */
-        unsigned int           durationSecs;        /**< Stores the duration the channel configuration shall be kept active */
-        bool                   isStart;             /**< Wether or not this is an irrigation start event */
-        IrrigationEvent*       parentPtr;           /**< Pointer to the parent object containing the event data */
+        int                 zoneIdx;        /**< Associated zone configuration index*/
+        unsigned int        durationSecs;   /**< Stores the duration the channel configuration shall be kept active */
+        bool                isStart;        /**< Wether or not this is an irrigation start event */
+        IrrigationEvent*    parentPtr;      /**< Pointer to the parent object containing the event data */
     } irrigation_event_data_t;
 
     IrrigationEvent(void);
     ~IrrigationEvent(void);
 
     void setDuration(unsigned int secs);
-    void setZoneConfig(irrigation_zone_cfg_t* cfg);
+    err_t setZoneIndex(int idx);
     void setStartFlag(bool isStart);
     err_t getEventData(irrigation_event_data_t* dest);
 

@@ -9,7 +9,7 @@ IrrigationEvent::IrrigationEvent(void)
     repetitionType = NOT_SET;
     refTime = 0;
 
-    eventData.zoneConfig = nullptr;
+    eventData.zoneIdx = -1;
     eventData.durationSecs = 1;
     eventData.isStart = true;
     eventData.parentPtr = this;
@@ -22,9 +22,14 @@ IrrigationEvent::~IrrigationEvent(void)
 {
 }
 
-void IrrigationEvent::setZoneConfig(irrigation_zone_cfg_t* cfg)
+IrrigationEvent::err_t IrrigationEvent::setZoneIndex(int idx)
 {
-    eventData.zoneConfig = cfg;
+    if((idx < -1) || (idx >= irrigationZoneCfgElements)) {
+        return ERR_INVALID_PARAM;
+    }
+
+    eventData.zoneIdx = idx;
+    return ERR_OK;
 }
 
 void IrrigationEvent::setDuration(unsigned int secs)

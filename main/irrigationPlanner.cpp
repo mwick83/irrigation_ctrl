@@ -3,29 +3,32 @@
 #include "outputController.h" // needed for CH_MAIN, ...
 #include "irrigationZoneCfg.h"
 
-//#define IRRIGATION_PLANNER_PRINT_ALL_EVENTS
+#include "globalComponents.h"
+
+#define IRRIGATION_PLANNER_PRINT_ALL_EVENTS
 //#define IRRIGATION_PLANNER_NEXT_EVENT_DEBUG
 //#define IRRIGATION_PLANNER_STOP_EVENT_DEBUG
 
 /**
  * @brief Default constructor, which performs basic initialization.
  */
-IrrigationPlanner::IrrigationPlanner(void)
+IrrigationPlanner::IrrigationPlanner()
 {
     // Prepare event and zone storages
-    for(int i = 0; i < numZones; i++) {
+    for(int i = 0; i < irrigationPlannerNumZones; i++) {
         zones[i].name[irrigationZoneCfgNameLen] = '\0';
         for(int j=0; j < irrigationZoneCfgElements; j++) {
             zones[i].chEnabled[j] = false;
         }
     }
-    for(int i = 0; i < numEvents; i++) {
+    for(int i = 0; i < irrigationPlannerNumEvents; i++) {
         eventsUsed[i] = false;
     }
-    for(int i = 0; i < numStopEvents; i++) {
+    for(int i = 0; i < irrigationPlannerNumStopEvents; i++) {
         stopEventsUsed[i] = false;
     }
 
+    /*
     // Setup fixed zones
     strncpy(zones[0].name, "MAIN", irrigationZoneCfgNameLen);
     zones[0].chEnabled[0] = true;
@@ -53,54 +56,44 @@ IrrigationPlanner::IrrigationPlanner(void)
         events[i*numHours].setDailyRepetition(hours[i], 0, 0);
         events[i*numHours].setStartFlag(true);
         events[i*numHours].setDuration(60);
-        events[i*numHours].setZoneConfig(&zones[0]);
+        events[i*numHours].setZoneIndex(0);
         eventsUsed[i*numHours] = true;
 
         events[i*numHours+1].setDailyRepetition(hours[i], 0, 15);
         events[i*numHours+1].setStartFlag(true);
         events[i*numHours+1].setDuration(45);
-        events[i*numHours+1].setZoneConfig(&zones[2]);
+        events[i*numHours+1].setZoneIndex(2);
         eventsUsed[i*numHours+1] = true;
 
         events[i*numHours+2].setDailyRepetition(hours[i], 0, 20);
         events[i*numHours+2].setStartFlag(true);
         events[i*numHours+2].setDuration(30);
-        events[i*numHours+2].setZoneConfig(&zones[1]);
+        events[i*numHours+2].setZoneIndex(1);
         eventsUsed[i*numHours+2] = true;
     }
+    */
 
     #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
-        // print all events out for debugging
-        for(int i = 0; i < numEvents; i++) {
-            if(eventsUsed[i]) {
-                IrrigationEvent* evt = &events[i];
-                evt->updateReferenceTime(time(NULL));
-                time_t eventTime = evt->getNextOccurance();
-                struct tm eventTm;
-                localtime_r(&eventTime, &eventTm);
-
-                printEventDetails(evt);
-            }
-        }
+    printAllEvents();
     #endif
 }
 
 /**
  * @brief Default destructor, which cleans up allocated data.
  */
-IrrigationPlanner::~IrrigationPlanner(void)
+IrrigationPlanner::~IrrigationPlanner()
 {
     // clean up all events and zones
-    for(int i = 0; i < numZones; i++) {
+    for(int i = 0; i < irrigationPlannerNumZones; i++) {
         zones[i].name[irrigationZoneCfgNameLen] = '\0';
         for(int j=0; j < irrigationZoneCfgElements; j++) {
             zones[i].chEnabled[j] = false;
         }
     }
-    for(int i = 0; i < (numZones * 4); i++) {
+    for(int i = 0; i < irrigationPlannerNumEvents; i++) {
         eventsUsed[i] = false;
     }
-    for(int i = 0; i < (numZones + 1); i++) {
+    for(int i = 0; i < irrigationPlannerNumStopEvents; i++) {
         stopEventsUsed[i] = false;
     }
 }
@@ -129,8 +122,8 @@ time_t IrrigationPlanner::getNextEventTime(time_t startTime, bool excludeStartTi
     }
 
     // getting the index will update all of the reference times as well
-    nextStartEventIdx = getNextEventIdx(startTime, events, eventsUsed, numEvents);
-    nextStopEventIdx = getNextEventIdx(startTime, stopEvents, stopEventsUsed, numStopEvents);
+    nextStartEventIdx = getNextEventIdx(startTime, events, eventsUsed, irrigationPlannerNumEvents);
+    nextStopEventIdx = getNextEventIdx(startTime, stopEvents, stopEventsUsed, irrigationPlannerNumStopEvents);
 
     if(nextStartEventIdx >= 0) {
         if(nextStopEventIdx >= 0) {
@@ -216,7 +209,7 @@ IrrigationPlanner::err_t IrrigationPlanner::getEventHandles(time_t eventTime,
     time_t checkEventTime = 0;
 
     // check start event list
-    for(int i=0; i < numEvents; i++) {
+    for(int i=0; i < irrigationPlannerNumEvents; i++) {
         if(eventsUsed[i]) {
             checkEventTime = events[i].getNextOccurance();
             if(checkEventTime == eventTime) {
@@ -233,7 +226,7 @@ IrrigationPlanner::err_t IrrigationPlanner::getEventHandles(time_t eventTime,
     }
 
     // check stop event list
-    for(int i=0; i < numStopEvents; i++) {
+    for(int i=0; i < irrigationPlannerNumStopEvents; i++) {
         if(stopEventsUsed[i]) {
             checkEventTime = stopEvents[i].getNextOccurance();
             if(checkEventTime == eventTime) {
@@ -283,7 +276,7 @@ IrrigationPlanner::err_t IrrigationPlanner::getEventData(IrrigationPlanner::even
     if(handle.idx < 0) return ERR_INVALID_HANDLE;
 
     if(handle.isStart) {
-        if(handle.idx >= numEvents) {
+        if(handle.idx >= irrigationPlannerNumEvents) {
             ret = ERR_INVALID_HANDLE;
         } else if(!eventsUsed[handle.idx]) {
             ret = ERR_INVALID_HANDLE;
@@ -292,7 +285,7 @@ IrrigationPlanner::err_t IrrigationPlanner::getEventData(IrrigationPlanner::even
             events[handle.idx].getEventData(dest);
         }
     } else {
-        if(handle.idx >= numStopEvents) {
+        if(handle.idx >= irrigationPlannerNumStopEvents) {
             ret = ERR_INVALID_HANDLE;
         } else if(!stopEventsUsed[handle.idx]) {
             ret = ERR_INVALID_HANDLE;
@@ -320,7 +313,7 @@ IrrigationPlanner::err_t IrrigationPlanner::confirmEvent(IrrigationPlanner::even
     if(handle.idx < 0) return ERR_INVALID_HANDLE;
 
     if(handle.isStart) {
-        if(handle.idx >= numEvents) {
+        if(handle.idx >= irrigationPlannerNumEvents) {
             ret = ERR_INVALID_HANDLE;
         } else if(!eventsUsed[handle.idx]) {
             ret = ERR_INVALID_HANDLE;
@@ -330,7 +323,7 @@ IrrigationPlanner::err_t IrrigationPlanner::confirmEvent(IrrigationPlanner::even
             }
         }
     } else {
-        if(handle.idx >= numStopEvents) {
+        if(handle.idx >= irrigationPlannerNumStopEvents) {
             ret = ERR_INVALID_HANDLE;
         } else if(!stopEventsUsed[handle.idx]) {
             ret = ERR_INVALID_HANDLE;
@@ -355,7 +348,7 @@ bool IrrigationPlanner::confirmNormalEvent(unsigned int idx)
     bool ret = false;
     IrrigationEvent::irrigation_event_data_t evtData;
 
-    for(int i=0; i<numStopEvents; i++) {
+    for(int i=0; i<irrigationPlannerNumStopEvents; i++) {
         if(!stopEventsUsed[i]) {
             // Mark the slot as used
             stopEventsUsed[i] = true;
@@ -399,7 +392,7 @@ bool IrrigationPlanner::confirmNormalEvent(unsigned int idx)
                     stopTimeTm.tm_mday, stopTimeTm.tm_mon + 1, stopTimeTm.tm_year + 1900);
                 stopEvents[i].setStartFlag(false);
                 stopEvents[i].setDuration(0);
-                stopEvents[i].setZoneConfig(evtData.zoneConfig);
+                stopEvents[i].setZoneIndex(evtData.zoneIdx);
                 stopEvents[i].updateReferenceTime(events[idx].getReferenceTime());
 
                 #ifdef IRRIGATION_PLANNER_STOP_EVENT_DEBUG
@@ -416,7 +409,7 @@ bool IrrigationPlanner::confirmNormalEvent(unsigned int idx)
     // Check for single shot event to disable it
     // Note: Do this independant if we managed to set a stop event above;
     // cleaning up is more important to stay operational
-    if(idx >= numNormalEvents) {
+    if(idx >= irrigationPlannerNumNormalEvents) {
         eventsUsed[idx] = false;
     }
 
@@ -445,21 +438,28 @@ void IrrigationPlanner::printEventDetails(IrrigationEvent* evt)
     localtime_r(&eventTime, &eventTm);
 
     IrrigationEvent::irrigation_event_data_t curEventData;
+    irrigation_zone_cfg_t* curZoneConfig = nullptr;
+
     if(IrrigationEvent::ERR_OK != evt->getEventData(&curEventData)) {
         ESP_LOGE(logTag, "Error retrieving event data.");
     } else {
-        if(nullptr != curEventData.zoneConfig) {
+        if(ERR_OK != getZoneConfigPtr(curEventData.zoneIdx, &curZoneConfig)) {
+            ESP_LOGE(logTag, "Error retrieving zone config.");
+            curZoneConfig = nullptr;
+        }
+
+        if(nullptr != curZoneConfig) {
             bool isStartEvent = curEventData.isStart;
             ESP_LOGD(logTag, "Event at %02d.%02d.%04d %02d:%02d:%02d, zone = %s, duration = %d s, start: %s",
                 eventTm.tm_mday, eventTm.tm_mon+1, 1900+eventTm.tm_year,
                 eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec,
-                curEventData.zoneConfig->name, curEventData.durationSecs, isStartEvent ? "yes" : "no");
+                curZoneConfig->name, curEventData.durationSecs, isStartEvent ? "yes" : "no");
             for(int i = 0; i < irrigationZoneCfgElements; i++) {
-                if(curEventData.zoneConfig->chEnabled[i]) {
+                if(curZoneConfig->chEnabled[i]) {
                     ESP_LOGD(logTag, "* Channel: %s, state: %s",
-                        CH_MAP_TO_STR(curEventData.zoneConfig->chNum[i]),
-                        isStartEvent ? (curEventData.zoneConfig->chStateStart[i] ? "ON" : "OFF") :
-                                       (curEventData.zoneConfig->chStateStop[i] ? "ON" : "OFF"));
+                        CH_MAP_TO_STR(curZoneConfig->chNum[i]),
+                        isStartEvent ? (curZoneConfig->chStateStart[i] ? "ON" : "OFF") :
+                                       (curZoneConfig->chStateStop[i] ? "ON" : "OFF"));
                 }
             }
         } else {
@@ -468,4 +468,41 @@ void IrrigationPlanner::printEventDetails(IrrigationEvent* evt)
                 eventTm.tm_hour, eventTm.tm_min, eventTm.tm_sec);
         }
     }
+}
+
+void IrrigationPlanner::printAllEvents()
+{
+    ESP_LOGD(logTag, "***** Planned events *****");
+    for(int i = 0; i < irrigationPlannerNumEvents; i++) {
+        if(eventsUsed[i]) {
+            IrrigationEvent* evt = &events[i];
+            evt->updateReferenceTime(time(NULL));
+            time_t eventTime = evt->getNextOccurance();
+            struct tm eventTm;
+            localtime_r(&eventTime, &eventTm);
+
+            printEventDetails(evt);
+        }
+    }
+    ESP_LOGD(logTag, "**************************");
+}
+
+IrrigationPlanner::err_t IrrigationPlanner::getZoneConfigPtr(int idx, irrigation_zone_cfg_t** cfg)
+{
+    if((idx < 0) || (idx >= irrigationZoneCfgElements)) {
+        return ERR_INVALID_ZONE_IDX;
+    }
+
+    *cfg = &zones[idx];
+
+    return ERR_OK;
+}
+
+void IrrigationPlanner::configurationUpdated()
+{
+    settingsMgr.copyZonesAndEvents(zones, events, eventsUsed);
+
+    #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
+    printAllEvents();
+    #endif
 }

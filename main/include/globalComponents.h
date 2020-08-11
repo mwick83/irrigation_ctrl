@@ -11,6 +11,7 @@
 #include "powerManager.h"
 #include "outputController.h"
 #include "mqttManager.h"
+#include "settingsManager.h"
 #include "irrigationPlanner.h"
 
 extern FillSensorPacketizer fillSensorPacketizer;
@@ -20,6 +21,7 @@ extern PowerManager pwrMgr;
 extern OutputController outputCtrl;
 
 extern MqttManager mqttMgr;
+extern SettingsManager settingsMgr;
 
 extern IrrigationPlanner irrigPlanner;
 

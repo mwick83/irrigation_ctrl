@@ -327,7 +327,13 @@ void IrrigationController::taskFunc()
                         if(IrrigationPlanner::ERR_OK != plannerErr) {
                             ESP_LOGE(logTag, "Error getting event data: %d. No actions available!", plannerErr);
                         } else {
-                            irrigation_zone_cfg_t* zoneCfg = eventData.zoneConfig;
+                            irrigation_zone_cfg_t* zoneCfg = nullptr;
+                            plannerErr = irrigPlanner.getZoneConfigPtr(eventData.zoneIdx, &zoneCfg);
+                            if(IrrigationPlanner::ERR_OK != plannerErr) {
+                                ESP_LOGE(caller->logTag, "Error getting zone config: %d. No actions available!", plannerErr);
+                                zoneCfg = nullptr;
+                            }
+
                             bool isStartEvent = eventData.isStart;
                             unsigned int durationSecs = isStartEvent ? eventData.durationSecs : 0;
                             if(nullptr != zoneCfg) {
@@ -340,13 +346,15 @@ void IrrigationController::taskFunc()
                                         durationSecs, isStartEvent);
                                     }
                                 }
+                            }
 
-                                plannerErr = irrigPlanner.confirmEvent(eventHandles[cnt]);
-                                if(IrrigationPlanner::ERR_OK != plannerErr) {
-                                    ESP_LOGE(logTag, "Error confirming event: %d. Not performing its actions!", plannerErr);
-                                } else {
-                                    setZoneOutputs(irrigOk, zoneCfg, isStartEvent);
-                                }
+                            plannerErr = irrigPlanner.confirmEvent(eventHandles[cnt]);
+                            if(IrrigationPlanner::ERR_OK != plannerErr) {
+                                ESP_LOGE(caller->logTag, "Error confirming event: %d. Not performing its actions!", plannerErr);
+                            }
+
+                            if((nullptr != zoneCfg) && (IrrigationPlanner::ERR_OK == plannerErr)) {
+                                caller->setZoneOutputs(irrigOk, zoneCfg, isStartEvent);
                             }
                         }
                     } else {

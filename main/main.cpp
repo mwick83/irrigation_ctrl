@@ -39,6 +39,7 @@ OutputController outputCtrl;
 MqttManager mqttMgr;
 IrrigationController irrigCtrl;
 IrrigationPlanner irrigPlanner;
+SettingsManager settingsMgr;
 
 // ********************************************************************
 // WiFi handling
@@ -265,6 +266,157 @@ void iapHttpsEventCallback(iap_https_event_t* event)
 }
 
 // ********************************************************************
+// settings manager helpers
+// ********************************************************************
+esp_err_t initializeSettingsMgr(void)
+{
+    esp_err_t ret = ESP_OK;
+
+    // setup default data
+    static const char defSettings[] =
+"{ \n"
+"    \"zones\": [ \n"
+"        { \n"
+"            \"name\": \"MAIN\", \n"
+"            \"chEnabled\": [true, false, false, false], \n"
+"            \"chNum\": [0, -1, -1, -1], \n"
+"            \"chStateStart\": [true, false, false, false], \n"
+"            \"chStateStop\": [false, false, false, false] \n"
+"        }, \n"
+"        { \n"
+"            \"name\": \"AUX0\", \n"
+"            \"chEnabled\": [true, false, false, false], \n"
+"            \"chNum\": [1, -1, -1, -1], \n"
+"            \"chStateStart\": [true, false, false, false], \n"
+"            \"chStateStop\": [false, false, false, false] \n"
+"        }, \n"
+"        { \n"
+"            \"name\": \"AUX1\", \n"
+"            \"chEnabled\": [true, false, false, false], \n"
+"            \"chNum\": [2, -1, -1, -1], \n"
+"            \"chStateStart\": [true, false, false, false], \n"
+"            \"chStateStop\": [false, false, false, false] \n"
+"        } \n"
+"    ], \n"
+"     \n"
+"    \"events\": [ \n"
+"        { \n"
+"            \"zoneNum\": 0, \n"
+"            \"durationSecs\": 60, \n"
+"            \"isSingle\": false, \n"
+"            \"isDaily\": true, \n"
+"            \"hour\": 8, \n"
+"            \"minute\": 0, \n"
+"            \"second\": 0, \n"
+"            \"day\": 0, \n"
+"            \"month\": 0, \n"
+"            \"year\": 0 \n"
+"        }, \n"
+"        { \n"
+"            \"zoneNum\": 0, \n"
+"            \"durationSecs\": 60, \n"
+"            \"isSingle\": false, \n"
+"            \"isDaily\": true, \n"
+"            \"hour\": 15, \n"
+"            \"minute\": 0, \n"
+"            \"second\": 0, \n"
+"            \"day\": 0, \n"
+"            \"month\": 0, \n"
+"            \"year\": 0 \n"
+"        }, \n"
+"        { \n"
+"            \"zoneNum\": 0, \n"
+"            \"durationSecs\": 60, \n"
+"            \"isSingle\": false, \n"
+"            \"isDaily\": true, \n"
+"            \"hour\": 21, \n"
+"            \"minute\": 0, \n"
+"            \"second\": 0, \n"
+"            \"day\": 0, \n"
+"            \"month\": 0, \n"
+"            \"year\": 0 \n"
+"        }, \n"
+"        { \n"
+"            \"zoneNum\": 2, \n"
+"            \"durationSecs\": 45, \n"
+"            \"isSingle\": false, \n"
+"            \"isDaily\": true, \n"
+"            \"hour\": 8, \n"
+"            \"minute\": 0, \n"
+"            \"second\": 15, \n"
+"            \"day\": 0, \n"
+"            \"month\": 0, \n"
+"            \"year\": 0 \n"
+"        }, \n"
+"        { \n"
+"            \"zoneNum\": 2, \n"
+"            \"durationSecs\": 45, \n"
+"            \"isSingle\": false, \n"
+"            \"isDaily\": true, \n"
+"            \"hour\": 15, \n"
+"            \"minute\": 0, \n"
+"            \"second\": 15, \n"
+"            \"day\": 0, \n"
+"            \"month\": 0, \n"
+"            \"year\": 0 \n"
+"        }, \n"
+"        { \n"
+"            \"zoneNum\": 2, \n"
+"            \"durationSecs\": 45, \n"
+"            \"isSingle\": false, \n"
+"            \"isDaily\": true, \n"
+"            \"hour\": 21, \n"
+"            \"minute\": 0, \n"
+"            \"second\": 15, \n"
+"            \"day\": 0, \n"
+"            \"month\": 0, \n"
+"            \"year\": 0 \n"
+"        }, \n"
+"        { \n"
+"            \"zoneNum\": 1, \n"
+"            \"durationSecs\": 30, \n"
+"            \"isSingle\": false, \n"
+"            \"isDaily\": true, \n"
+"            \"hour\": 8, \n"
+"            \"minute\": 0, \n"
+"            \"second\": 20, \n"
+"            \"day\": 0, \n"
+"            \"month\": 0, \n"
+"            \"year\": 0 \n"
+"        }, \n"
+"        { \n"
+"            \"zoneNum\": 1, \n"
+"            \"durationSecs\": 30, \n"
+"            \"isSingle\": false, \n"
+"            \"isDaily\": true, \n"
+"            \"hour\": 15, \n"
+"            \"minute\": 0, \n"
+"            \"second\": 20, \n"
+"            \"day\": 0, \n"
+"            \"month\": 0, \n"
+"            \"year\": 0 \n"
+"        }, \n"
+"        { \n"
+"            \"zoneNum\": 1, \n"
+"            \"durationSecs\": 30, \n"
+"            \"isSingle\": false, \n"
+"            \"isDaily\": true, \n"
+"            \"hour\": 21, \n"
+"            \"minute\": 0, \n"
+"            \"second\": 20, \n"
+"            \"day\": 0, \n"
+"            \"month\": 0, \n"
+"            \"year\": 0 \n"
+"        } \n"
+"    ] \n"
+"} \n";
+
+    settingsMgr.updateIrrigationConfig(defSettings);
+
+    return ret;
+}
+
+// ********************************************************************
 // app_main
 // ********************************************************************
 //static vprintf_like_t previousLogVprintf;
@@ -305,6 +457,9 @@ extern "C" void app_main()
 
     // Initialize OTA system
     otaInitialize();
+
+    // Initialize settings storage including setup of hooks, initial load from file, etc.
+    ESP_ERROR_CHECK( initializeSettingsMgr() );
 
     // Start WiFi. Events will start/stop MQTT client
     ESP_ERROR_CHECK( esp_wifi_start() );
