@@ -330,7 +330,7 @@ void IrrigationController::taskFunc()
                             irrigation_zone_cfg_t* zoneCfg = nullptr;
                             plannerErr = irrigPlanner.getZoneConfigPtr(eventData.zoneIdx, &zoneCfg);
                             if(IrrigationPlanner::ERR_OK != plannerErr) {
-                                ESP_LOGE(caller->logTag, "Error getting zone config: %d. No actions available!", plannerErr);
+                                ESP_LOGE(logTag, "Error getting zone config: %d. No actions available!", plannerErr);
                                 zoneCfg = nullptr;
                             }
 
@@ -350,11 +350,11 @@ void IrrigationController::taskFunc()
 
                             plannerErr = irrigPlanner.confirmEvent(eventHandles[cnt]);
                             if(IrrigationPlanner::ERR_OK != plannerErr) {
-                                ESP_LOGE(caller->logTag, "Error confirming event: %d. Not performing its actions!", plannerErr);
+                                ESP_LOGE(logTag, "Error confirming event: %d. Not performing its actions!", plannerErr);
                             }
 
                             if((nullptr != zoneCfg) && (IrrigationPlanner::ERR_OK == plannerErr)) {
-                                caller->setZoneOutputs(irrigOk, zoneCfg, isStartEvent);
+                                setZoneOutputs(irrigOk, zoneCfg, isStartEvent);
                             }
                         }
                     } else {
