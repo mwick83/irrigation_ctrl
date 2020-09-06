@@ -9,8 +9,7 @@ GIT_VERSION := $(shell git describe --abbrev=8 --dirty --always --tags)
 CFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
 CXXFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
 
-COMPONENT_EMBED_TXTFILES := ota_root_ca_cert.pem ota_host_public_key.pem
-
+COMPONENT_EMBED_TXTFILES := ota_root_ca_cert.pem ota_host_public_key.pem irrigationConfig.default.json
 # override the default build target to touch version.h
 .PHONY: build
 build: update_version $(COMPONENT_LIBRARY)

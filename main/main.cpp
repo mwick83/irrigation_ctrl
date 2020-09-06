@@ -309,13 +309,45 @@ esp_err_t initializeSpiffs(void)
 // ********************************************************************
 // settings manager helpers
 // ********************************************************************
+extern const uint8_t irrigationConfig_default_json_start[] asm("_binary_irrigationConfig_default_json_start");
+extern const uint8_t irrigationConfig_default_json_end[] asm("_binary_irrigationConfig_default_json_end");
+
 esp_err_t initializeSettingsMgr(void)
 {
     esp_err_t ret = ESP_OK;
 
     // setup default data
-    static const char defSettings[] =
+    settingsMgr.updateIrrigationConfig((const char*) irrigationConfig_default_json_start);
+
+    // try to read irrigation config file from SPIFFS
+    bool irrigationConfigRead = false;
+    struct stat st;
+    if (stat(filepathConfigStore, &st) == 0) {
+        FILE* f = fopen(filepathConfigStore, "r");
+        if (f == NULL) {
+            ESP_LOGW(LOG_TAG_SPIFFS, "Failed to open irrigation config file for reading.");
+        } else {
+            static char settingsBuffer[4096];
+            size_t bytesRead;
+            bytesRead = fread(settingsBuffer, sizeof(char), sizeof(settingsBuffer), f);
+            fclose(f);
+
+            if(bytesRead == sizeof(settingsBuffer)) {
+                ESP_LOGW(LOG_TAG_SPIFFS, "Irrigation config file too big for read buffer. Not reading it in.");
+            } else if(bytesRead > 0) {
+                ESP_LOGI(LOG_TAG_SPIFFS, "Updating irrigation config from file.");
+                settingsMgr.updateIrrigationConfig(settingsBuffer);
+            }
+        }
+    }
+
+    if (!irrigationConfigRead) {
+        ESP_LOGW(LOG_TAG_SPIFFS, "Falling back to hard-coded config.");
+        // temporarily load real config
+        static const char defSettings[] =
 "{ \n"
+"    \"storePersistent\": false, \n"
+"    \n"
 "    \"zones\": [ \n"
 "        { \n"
 "            \"name\": \"MAIN\", \n"
@@ -339,7 +371,7 @@ esp_err_t initializeSettingsMgr(void)
 "            \"chStateStop\": [false, false, false, false] \n"
 "        } \n"
 "    ], \n"
-"     \n"
+"    \n"
 "    \"events\": [ \n"
 "        { \n"
 "            \"zoneNum\": 0, \n"
@@ -452,7 +484,8 @@ esp_err_t initializeSettingsMgr(void)
 "    ] \n"
 "} \n";
 
-    settingsMgr.updateIrrigationConfig(defSettings);
+        settingsMgr.updateIrrigationConfig(defSettings);
+    }
 
     return ret;
 }
