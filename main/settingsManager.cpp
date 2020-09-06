@@ -252,6 +252,26 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
             }
         }
 
+        cJSON* storePersistentPtr = cJSON_GetObjectItem(root, "storePersistent");
+        if( (nullptr != storePersistentPtr) && cJSON_IsBool(storePersistentPtr) && cJSON_IsTrue(storePersistentPtr) ) {
+            ESP_LOGI(logTag, "Persistent storage of irrigation configuration requested.");
+
+            cJSON* storePersistentFalsePtr = cJSON_CreateBool(false);
+            if((nullptr == storePersistentFalsePtr) || (!cJSON_ReplaceItemViaPointer(root, storePersistentPtr, storePersistentFalsePtr))) {
+                ESP_LOGE(logTag, "Removing presistancy flag before saving irrigation config failed. Aborting.");
+            } else {
+                if (ERR_OK != writeIrrigationConfigFile(jsonStr)) {
+                    ESP_LOGE(logTag, "Error saving irrigation configuration file.");
+                } else {
+                    ESP_LOGI(logTag, "Irrigation configuration saved successfully.");
+                }
+            }
+
+            if(nullptr != storePersistentFalsePtr) {
+                cJSON_Delete(storePersistentFalsePtr);
+            }
+        }
+
         xSemaphoreGive(configMutex);
 
         if(ret == ERR_OK) {
@@ -302,6 +322,11 @@ SettingsManager::err_t SettingsManager::readIrrigationConfigFile()
     }
 
     return ret;
+}
+
+SettingsManager::err_t SettingsManager::writeIrrigationConfigFile(const char* const jsonStr)
+{
+    return ERR_TIMEOUT;
 }
 
 SettingsManager::err_t SettingsManager::copyZonesAndEvents(

@@ -66,6 +66,8 @@ private:
     void clearEventData(settings_container_t& settings);
     err_t jsonParseZone(cJSON* zoneJson, irrigation_zone_cfg_t& zoneCfg);
     err_t jsonParseEvent(cJSON* evtJson, IrrigationEvent& evt, bool& used);
+
+    err_t writeIrrigationConfigFile(const char* const jsonStr);
 };
 
 #endif /* SETTINGS_MANAGER_H */
