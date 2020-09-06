@@ -312,6 +312,12 @@ esp_err_t initializeSpiffs(void)
 extern const uint8_t irrigationConfig_default_json_start[] asm("_binary_irrigationConfig_default_json_start");
 extern const uint8_t irrigationConfig_default_json_end[] asm("_binary_irrigationConfig_default_json_end");
 
+#define MQTT_CONFIG_IRRIG_TOPIC_PRE              "whan/irrigation/"
+#define MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN          16
+#define MQTT_CONFIG_IRRIG_TOPIC_POST_SET         "/irrig_config/set"
+#define MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN     17
+void mqttIrrigConfigSetCallback(const char* topic, int topicLen, const char* data, int dataLen);
+
 esp_err_t initializeSettingsMgr(void)
 {
     esp_err_t ret = ESP_OK;
@@ -339,6 +345,27 @@ esp_err_t initializeSettingsMgr(void)
                 settingsMgr.updateIrrigationConfig(settingsBuffer);
             }
         }
+    }
+
+    // subscribe to the irrigation config topic
+    static char otaTopic[MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN + MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN + 12 + 1];
+    static uint8_t mac_addr[6];
+
+    ret = esp_wifi_get_mac(ESP_IF_WIFI_STA, mac_addr);
+
+    if(ESP_OK == ret) {
+        memcpy(otaTopic, MQTT_CONFIG_IRRIG_TOPIC_PRE, MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN);
+        for(int i=0; i<6; i++) {
+            sprintf(&otaTopic[MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN + i*2], "%02x", mac_addr[i]);
+        }
+        memcpy(&otaTopic[MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN + 12], MQTT_CONFIG_IRRIG_TOPIC_POST_SET, MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN);
+        otaTopic[MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN + MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN + 12] = 0;
+        
+        if(MqttManager::ERR_OK != mqttMgr.subscribe(otaTopic, MqttManager::QOS_EXACTLY_ONCE, mqttIrrigConfigSetCallback)) {
+            ESP_LOGW(LOG_TAG_OTA, "Failed to subscribe to irrigation config topic!");
+        }
+    } else {
+        ESP_LOGW(LOG_TAG_OTA, "Failed to get WiFi MAC address for irrigation config topic subscription.");
     }
 
     if (!irrigationConfigRead) {
@@ -488,6 +515,25 @@ esp_err_t initializeSettingsMgr(void)
     }
 
     return ret;
+}
+
+void mqttIrrigConfigSetCallback(const char* topic, int topicLen, const char* data, int dataLen)
+{
+    // TBD: lock for reentrancy?
+    static char jsonBuffer[4096];
+
+    // check for minimum ("{}") and maximum data length
+    if ((dataLen >= 2) && (dataLen <= 4095)) {
+        memcpy(jsonBuffer, data, sizeof(char) * dataLen);
+        jsonBuffer[dataLen] = 0;
+
+        ESP_LOGD("irrig_cfg_cb", "rcv: %s", jsonBuffer);
+        if (SettingsManager::ERR_OK == settingsMgr.updateIrrigationConfig(jsonBuffer)) {
+            // TBD: publish state somewhere
+        }
+        // clear the topic, so we won't parse it again
+        //TBD: mqttMgr.publish(topic, nullptr, 0, MqttManager::QOS_EXACTLY_ONCE, true);
+    }
 }
 
 // ********************************************************************
