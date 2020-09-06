@@ -323,7 +323,7 @@ esp_err_t initializeSettingsMgr(void)
     esp_err_t ret = ESP_OK;
 
     // setup default data
-    settingsMgr.updateIrrigationConfig((const char*) irrigationConfig_default_json_start);
+    settingsMgr.updateIrrigationConfig((const char*) irrigationConfig_default_json_start, irrigationConfig_default_json_end - irrigationConfig_default_json_start + 1);
 
     // try to read irrigation config file from SPIFFS
     bool irrigationConfigRead = false;
@@ -511,7 +511,7 @@ esp_err_t initializeSettingsMgr(void)
 "    ] \n"
 "} \n";
 
-        settingsMgr.updateIrrigationConfig(defSettings);
+        settingsMgr.updateIrrigationConfig(defSettings, strlen(defSettings));
     }
 
     return ret;
@@ -519,21 +519,11 @@ esp_err_t initializeSettingsMgr(void)
 
 void mqttIrrigConfigSetCallback(const char* topic, int topicLen, const char* data, int dataLen)
 {
-    // TBD: lock for reentrancy?
-    static char jsonBuffer[4096];
-
-    // check for minimum ("{}") and maximum data length
-    if ((dataLen >= 2) && (dataLen <= 4095)) {
-        memcpy(jsonBuffer, data, sizeof(char) * dataLen);
-        jsonBuffer[dataLen] = 0;
-
-        ESP_LOGD("irrig_cfg_cb", "rcv: %s", jsonBuffer);
-        if (SettingsManager::ERR_OK == settingsMgr.updateIrrigationConfig(jsonBuffer)) {
-            // TBD: publish state somewhere
-        }
-        // clear the topic, so we won't parse it again
-        //TBD: mqttMgr.publish(topic, nullptr, 0, MqttManager::QOS_EXACTLY_ONCE, true);
+    if (SettingsManager::ERR_OK == settingsMgr.updateIrrigationConfig(data, dataLen)) {
+        // TBD: publish state somewhere
     }
+    // clear the topic, so we won't parse it again
+    //TBD: mqttMgr.publish(topic, nullptr, 0, MqttManager::QOS_EXACTLY_ONCE, true);
 }
 
 // ********************************************************************

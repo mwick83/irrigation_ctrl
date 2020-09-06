@@ -167,11 +167,14 @@ SettingsManager::err_t SettingsManager::jsonParseEvent(cJSON* evtJson, Irrigatio
     return ret;
 }
 
-SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const jsonStr)
+SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const jsonData, int jsonDataLen)
 {
     err_t ret = ERR_OK;
+    static char jsonStr[4096]; // data is not a NULL-terminated string, therefore we need to pre-process it
 
-    if(nullptr == jsonStr) return ERR_INVALID_ARG;
+    if (nullptr == jsonData) return ERR_INVALID_ARG;
+    if (jsonDataLen < 2) return ERR_INVALID_ARG; // check for minimum data length ("{}")
+    if (jsonDataLen > 4095) return ERR_INVALID_ARG; // chekc for maximum buffer space
 
     if(pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
         ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
@@ -183,6 +186,9 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
 
         clearZoneData(settingsTemp);
         clearEventData(settingsTemp);
+
+        memcpy(jsonStr, jsonData, sizeof(char) * jsonDataLen);
+        jsonStr[jsonDataLen] = 0;
 
         cJSON* root = cJSON_ParseWithOpts(jsonStr, nullptr, true);
         cJSON* zones;

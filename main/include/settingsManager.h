@@ -36,7 +36,7 @@ public:
     SettingsManager();
     ~SettingsManager();
 
-    err_t updateIrrigationConfig(const char* const jsonStr);
+    err_t updateIrrigationConfig(const char* const jsonData, int jsonDataLen);
     err_t copyZonesAndEvents(irrigation_zone_cfg_t* zones, IrrigationEvent* events, bool* eventsUsed);
 
 private:
