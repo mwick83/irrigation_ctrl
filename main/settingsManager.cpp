@@ -11,8 +11,6 @@ SettingsManager::SettingsManager(void)
     clearZoneData(shadowData);
     clearEventData(shadowData);
 
-    shadowDataDirty = false;
-
     configMutex = xSemaphoreCreateMutexStatic(&configMutexBuf);
 }
 
@@ -180,6 +178,9 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
         ret = ERR_TIMEOUT;
     } else {
         static settings_container_t settingsTemp;
+
+        pwrMgr.setKeepAwakeForce(true);
+
         clearZoneData(settingsTemp);
         clearEventData(settingsTemp);
 
@@ -239,14 +240,15 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
                 shadowData.events[i] = settingsTemp.events[i];
                 shadowData.eventsUsed[i] = settingsTemp.eventsUsed[i];
             }
-            shadowDataDirty = true;
         }
 
         xSemaphoreGive(configMutex);
 
-        if((ret == ERR_OK) && shadowDataDirty) {
+        if(ret == ERR_OK) {
             irrigPlanner.configurationUpdated();
         }
+
+        pwrMgr.setKeepAwakeForce(false);
     }
 
     return ret;

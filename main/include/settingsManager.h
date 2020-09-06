@@ -54,7 +54,6 @@ private:
     } settings_container_t;
 
     settings_container_t shadowData;
-    bool shadowDataDirty;
 
     void clearZoneData(settings_container_t& settings);
     void clearEventData(settings_container_t& settings);
