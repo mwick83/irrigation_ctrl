@@ -501,13 +501,39 @@ IrrigationPlanner::err_t IrrigationPlanner::getZoneConfigPtr(int idx, irrigation
     return ERR_OK;
 }
 
+void IrrigationPlanner::setConfigLock(bool lockState)
+{
+    configLock = lockState;
+
+    if ((lockState == false) && (configUpdatedDuringLock == true)) {
+        ESP_LOGI(logTag, "Config lock released. Performing postponed configuration update.");
+        configUpdatedDuringLock = false;
+        configurationUpdated();
+    }
+}
+
+bool IrrigationPlanner::getConfigLock()
+{
+    return configLock;
+}
+
 void IrrigationPlanner::configurationUpdated()
 {
-    settingsMgr.copyZonesAndEvents(zones, events, eventsUsed);
+    if (configLock) {
+        configUpdatedDuringLock = true;
+        ESP_LOGI(logTag, "Configuration update received during locked state. Postponing update.");
+    } else {
+        ESP_LOGI(logTag, "Configuration update received.");
+        settingsMgr.copyZonesAndEvents(zones, events, eventsUsed);
 
-    #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
-    printAllEvents();
-    #endif
+        #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
+        printAllEvents();
+        #endif
+
+        if (nullptr != configUpdatedHook) {
+            configUpdatedHook(configUpdatedHookParamPtr);
+        }
+    }
 }
 
 void IrrigationPlanner::registerConfigurationUpdatedHook(IrrigConfigUpdateHookFncPtr hook, void* param)

@@ -54,6 +54,9 @@ public:
     err_t getEventData(event_handle_t handle, IrrigationEvent::irrigation_event_data_t* dest);
     err_t confirmEvent(event_handle_t handle);
 
+    void setConfigLock(bool lockState);
+    bool getConfigLock();
+
     err_t getZoneConfigPtr(int idx, irrigation_zone_cfg_t** cfg);
 
     void configurationUpdated();
