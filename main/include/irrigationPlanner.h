@@ -44,6 +44,8 @@ public:
         bool isStart;
     } event_handle_t;
 
+    typedef void(*IrrigConfigUpdateHookFncPtr)(void*);
+
     IrrigationPlanner();
     ~IrrigationPlanner();
 
@@ -55,6 +57,7 @@ public:
     err_t getZoneConfigPtr(int idx, irrigation_zone_cfg_t** cfg);
 
     void configurationUpdated();
+    void registerConfigurationUpdatedHook(IrrigConfigUpdateHookFncPtr hook, void* param);
 
 private:
     const char* logTag = "irrig_planner";
@@ -66,6 +69,12 @@ private:
 
     IrrigationEvent stopEvents[irrigationPlannerNumStopEvents];     /**< Storage holding irrigation stop events. */
     bool stopEventsUsed[irrigationPlannerNumStopEvents];            /**< Flag weather or not the corresponding stop event storage is used. */
+
+    bool configLock;                                                /**< Flag weather or not the config should be locked from updates. */
+    bool configUpdatedDuringLock;                                   /**< Flag weather or not a config update happend during a locked phase. */
+
+    IrrigConfigUpdateHookFncPtr configUpdatedHook;                  /**< Configuration updated hook function storage. */
+    void* configUpdatedHookParamPtr;                                /**< Parameter storage for configuration updated hook function. */
 
     int getNextEventIdx(time_t startTime, IrrigationEvent* eventList, bool* eventUsedList, unsigned int listElements);
     void printEventDetails(IrrigationEvent* evt);

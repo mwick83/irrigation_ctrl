@@ -76,6 +76,9 @@ IrrigationPlanner::IrrigationPlanner()
     #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
     printAllEvents();
     #endif
+
+    configUpdatedHook = nullptr;
+    configUpdatedHookParamPtr = nullptr;
 }
 
 /**
@@ -505,4 +508,11 @@ void IrrigationPlanner::configurationUpdated()
     #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
     printAllEvents();
     #endif
+}
+
+void IrrigationPlanner::registerConfigurationUpdatedHook(IrrigConfigUpdateHookFncPtr hook, void* param)
+{
+    // TBD: implement list of hooks if needed
+    configUpdatedHook = hook;
+    configUpdatedHookParamPtr = param;
 }
