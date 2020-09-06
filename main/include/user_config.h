@@ -7,6 +7,7 @@
 // debug log tags
 static const char* LOG_TAG_WIFI __attribute__((unused)) = "wifi_app";
 static const char* LOG_TAG_OTA __attribute__((unused)) = "ota";
+static const char* LOG_TAG_SPIFFS __attribute__((unused)) = "spiffs";
 
 // debug output config
 //#define INFO(fmt, ...) os_printf("%s:%d::" fmt "\n", __BASE_FILE__, __LINE__, ##__VA_ARGS__)
@@ -14,5 +15,6 @@ static const char* LOG_TAG_OTA __attribute__((unused)) = "ota";
 
 #include "hardwareConfig.h"
 #include "networkConfig.h"
+#include "fileConfig.h"
 
 #endif /* USER_CONFIG_H */

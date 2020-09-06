@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -11,6 +12,7 @@
 #include "esp_event_loop.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "esp_spiffs.h"
 
 #include "user_config.h"
 #include "version.h"
@@ -266,6 +268,45 @@ void iapHttpsEventCallback(iap_https_event_t* event)
 }
 
 // ********************************************************************
+// SPIFFS init
+// ********************************************************************
+esp_err_t initializeSpiffs(void)
+{
+    esp_err_t ret = ESP_OK;
+
+    esp_vfs_spiffs_conf_t conf = {
+      .base_path = filepathConfigStore,
+      .partition_label = partlabelConfigStore,
+      .max_files = 4,
+      .format_if_mount_failed = true
+    };
+
+    ret = esp_vfs_spiffs_register(&conf);
+
+    if (ret != ESP_OK) {
+        if (ret == ESP_FAIL) {
+            ESP_LOGE(LOG_TAG_SPIFFS, "Failed to mount or format config filesystem");
+        } else if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(LOG_TAG_SPIFFS, "Failed to find config partition");
+        } else {
+            ESP_LOGE(LOG_TAG_SPIFFS, "Failed to initialize SPIFFS (%s)", esp_err_to_name(ret));
+        }
+    }
+
+    if (ESP_OK == ret) {
+        size_t total = 0, used = 0;
+        ret = esp_spiffs_info(partlabelConfigStore, &total, &used);
+        if (ret != ESP_OK) {
+            ESP_LOGE(LOG_TAG_SPIFFS, "Failed to get partition information (%s)", esp_err_to_name(ret));
+        } else {
+            ESP_LOGI(LOG_TAG_SPIFFS, "Partition size: total: %d, used: %d", total, used);
+        }
+    }
+
+    return ret;
+}
+
+// ********************************************************************
 // settings manager helpers
 // ********************************************************************
 esp_err_t initializeSettingsMgr(void)
@@ -455,6 +496,9 @@ extern "C" void app_main()
     ESP_ERROR_CHECK( initializeMqttMgr() );
 
     initializeOta();
+
+    // Initialize the SPIFFS, which may contain a config file
+    ESP_ERROR_CHECK( initializeSpiffs() );
 
     // Initialize settings storage including setup of hooks, initial load from file, etc.
     ESP_ERROR_CHECK( initializeSettingsMgr() );
