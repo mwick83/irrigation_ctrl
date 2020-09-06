@@ -147,8 +147,9 @@ void IrrigationController::taskFunc()
         }
     }
 
-    // Register time system hook
+    // Register event hooks
     TimeSystem_RegisterHook(timeSytemEventsHookDispatch, this);
+    irrigPlanner.registerConfigurationUpdatedHook(irrigConfigUpdatedHookDispatch, this);
 
     while(1) {
         loopStartTicks = xTaskGetTickCount();
@@ -296,6 +297,16 @@ void IrrigationController::taskFunc()
             nextIrrigEvent = irrigPlanner.getNextEventTime(irrigCtrlPersistentData.lastIrrigEvent, true);
             state.nextIrrigEvent = nextIrrigEvent;
             millisTillNextEvent = (int) round(difftime(nextIrrigEvent, now) * 1000.0);
+
+            // lock the configuration before an event starts (incl. some guard time)
+            if ((nextIrrigEvent != 0) && (millisTillNextEvent <= preEventMillis)) {
+                ESP_LOGD(logTag, "Event is approaching. Locking configuration.");
+                irrigPlanner.setConfigLock(true);
+            }
+            else if (!outputCtrl.anyOutputsActive() && irrigPlanner.getConfigLock()) {
+                ESP_LOGD(logTag, "Releasing config lock, because no events are near.");
+                irrigPlanner.setConfigLock(false);
+            }
 
             // // Publish state with the updated next event time
             // publishStateUpdate();
