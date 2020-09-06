@@ -496,8 +496,8 @@ void IrrigationController::taskFunc()
             firstRun = false;
 
             int sleepMillis = wakeupIntervalKeepAwakeMillis - loopRunTimeMillis;
-            if(sleepMillis > millisTillNextEvent) sleepMillis = millisTillNextEvent - preEventMillis;
-            if(sleepMillis < 500) sleepMillis = 500;
+            if ((nextIrrigEvent != 0) && (sleepMillis > millisTillNextEvent)) sleepMillis = millisTillNextEvent - preEventMillis;
+            if (sleepMillis < 500) sleepMillis = 500;
 
             ESP_LOGD(logTag, "Task is going to sleep for %d ms.", sleepMillis);
             if(sleepMillis > taskMaxSleepTimeMillis) {
@@ -534,7 +534,7 @@ void IrrigationController::taskFunc()
 
             int millisTillNextEventCompensated = millisTillNextEvent - preEventMillisDeepSleep - mqttAllPublishedWaitMillis;
             int sleepMillis = wakeupIntervalMillis - loopRunTimeMillis;
-            if(sleepMillis > millisTillNextEventCompensated) sleepMillis = millisTillNextEventCompensated;
+            if((nextIrrigEvent != 0) && (sleepMillis > millisTillNextEventCompensated)) sleepMillis = millisTillNextEventCompensated;
             if(sleepMillis < 500) sleepMillis = 500;
 
             // Check if there is enough wakeup time
