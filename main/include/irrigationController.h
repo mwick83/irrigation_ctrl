@@ -197,9 +197,13 @@ private:
     static void timeSytemEventsHookDispatch(void* param, time_system_event_t events);
     void timeSytemEventHandler(time_system_event_t events);
 
-    EventGroupHandle_t timeEvents;
-    const int timeEventTimeSet = (1<<0);
-    const int timeEventTimeSetSntp = (1<<1);
+    static void irrigConfigUpdatedHookDispatch(void* param);
+    void irrigConfigUpdatedEventHandler();
+
+    EventGroupHandle_t extEvents;
+    const int extEventTimeSet = (1<<0);
+    const int extEventTimeSetSntp = (1<<1);
+    const int extEventIrrigConfigUpdated = (1<<2);
 };
 
 #endif /* IRRIGATION_CONTROLLER_H */

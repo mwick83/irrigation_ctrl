@@ -45,10 +45,10 @@ IrrigationController::IrrigationController(void)
     // Prepare time system event hook to react properly on time changes
     // Note: hook registration will be performed by the main thread, because the
     // IrrigationPlanner instance will be created before the TimeSystem is initialized.
-    timeEvents = xEventGroupCreate();
+    extEvents = xEventGroupCreate();
 
-    if(NULL == timeEvents) {
-        ESP_LOGE(logTag, "timeEvents event group couldn't be created.");
+    if(NULL == extEvents) {
+        ESP_LOGE(logTag, "extEvents event group couldn't be created.");
     }
 }
 
@@ -67,7 +67,7 @@ IrrigationController::~IrrigationController(void)
  */
 void IrrigationController::start(void)
 {
-    if(NULL == timeEvents) {
+    if(NULL == extEvents) {
         ESP_LOGE(logTag, "Needed resources haven't been allocated. Not starting the task.");
     } else {
         taskHandle = xTaskCreateStatic(taskFuncDispatch, "irrig_ctrl_task", taskStackSize, (void*) this, taskPrio, taskStack, &taskBuf);
@@ -265,8 +265,8 @@ void IrrigationController::taskFunc()
             now = time(nullptr);
 
             // Check if the system time has been (re)set
-            events = xEventGroupClearBits(timeEvents, timeEventTimeSet | timeEventTimeSetSntp);
-            if(0 != (events & timeEventTimeSet)) {
+            events = xEventGroupClearBits(extEvents, extEventTimeSet | extEventTimeSetSntp | extEventIrrigConfigUpdated);
+            if(0 != (events & extEventTimeSet)) {
                 ESP_LOGI(logTag, "Time set detected. Resetting event processing.");
                 // Recalculate lastIrrigEvent to not process events that haven't really 
                 // happend in-between last time and now.
@@ -277,7 +277,7 @@ void IrrigationController::taskFunc()
 
                 // Calculate the next SNTP sync only if this was a manual time set event, otherwise
                 // the next sync time has already been set above
-                if(0 == (events & timeEventTimeSetSntp)) {
+                if(0 == (events & extEventTimeSetSntp)) {
                     struct tm sntpNextSyncTm;
                     localtime_r(&now, &sntpNextSyncTm);
                     sntpNextSyncTm.tm_hour += sntpResyncIntervalHours;
@@ -287,6 +287,10 @@ void IrrigationController::taskFunc()
 
                 // Disable all outputs to abort any irrigations that may have been started.
                 outputCtrl.disableAllOutputs();
+            }
+            if (0 != (events & extEventIrrigConfigUpdated)) {
+                ESP_LOGI(logTag, "Irrigation configuration update detected.");
+                // Note: Special handling of extEventIrrigConfigUpdated not needed, because getNextEventTime is done unconditionally
             }
 
             nextIrrigEvent = irrigPlanner.getNextEventTime(irrigCtrlPersistentData.lastIrrigEvent, true);
@@ -407,7 +411,7 @@ void IrrigationController::taskFunc()
                 TimeSystem_SntpRequest();
 
                 // Wait for the sync
-                events = xEventGroupWaitBits(timeEvents, timeEventTimeSetSntp, pdTRUE, pdTRUE, pdMS_TO_TICKS(timeResyncWaitMillis));
+                events = xEventGroupWaitBits(extEvents, extEventTimeSetSntp, pdTRUE, pdTRUE, pdMS_TO_TICKS(timeResyncWaitMillis));
 
                 // Stop the SNTP background process, so it won't intefere with running irrigations
                 TimeSystem_SntpStop();
@@ -417,7 +421,7 @@ void IrrigationController::taskFunc()
                 sntpNextSync = time(nullptr);
                 localtime_r(&sntpNextSync, &sntpNextSyncTm);
                 // Check status of sync to determine the next sync time
-                if(0 != (events & timeEventTimeSetSntp)) {
+                if(0 != (events & extEventTimeSetSntp)) {
                     ESP_LOGI(logTag, "SNTP time (re)sync was successful.");
                     sntpNextSyncTm.tm_hour += sntpResyncIntervalHours;
                 } else {
@@ -440,8 +444,8 @@ void IrrigationController::taskFunc()
         now = time(nullptr);
 
         // Check if the system time has been (re)set
-        events = xEventGroupClearBits(timeEvents, timeEventTimeSet | timeEventTimeSetSntp);
-        if(0 != (events & timeEventTimeSet)) {
+        events = xEventGroupClearBits(extEvents, extEventTimeSet | extEventTimeSetSntp | extEventIrrigConfigUpdated);
+        if (0 != (events & extEventTimeSet)) {
             // Recalculate lastIrrigEvent and nextIrrig to not process events that haven't really 
             // happend in-between last time and now.
             ESP_LOGI(logTag, "Time set detected. Resetting event processing.");
@@ -453,7 +457,7 @@ void IrrigationController::taskFunc()
 
             // Calculate the next SNTP sync only if this was a manual time set event, otherwise
             // the next sync time has already been set above
-            if(0 == (events & timeEventTimeSetSntp)) {
+            if(0 == (events & extEventTimeSetSntp)) {
                 struct tm sntpNextSyncTm;
                 localtime_r(&now, &sntpNextSyncTm);
                 sntpNextSyncTm.tm_hour += sntpResyncIntervalHours;
@@ -467,6 +471,11 @@ void IrrigationController::taskFunc()
             // Update next irrigation event and publish (also the new SNTP info set above)
             state.nextIrrigEvent = nextIrrigEvent;
             publishStateUpdate();
+        }
+        // update the next event time if the schedule has been updated
+        if (0 != (events & extEventIrrigConfigUpdated)) {
+            ESP_LOGI(logTag, "Irrigation configuration update detected. Recalculating next event time.");
+            nextIrrigEvent = irrigPlanner.getNextEventTime(irrigCtrlPersistentData.lastIrrigEvent, true);
         }
 
         millisTillNextEvent = (int) round(difftime(nextIrrigEvent, now) * 1000.0);
@@ -717,10 +726,10 @@ void IrrigationController::timeSytemEventHandler(time_system_event_t events)
 {
     // set an event group bit for the processing task
     if(0 != (events & TimeSystem_timeEventTimeSet)) {
-        xEventGroupSetBits(timeEvents, timeEventTimeSet);
+        xEventGroupSetBits(extEvents, extEventTimeSet);
     }
     if(0 != (events & TimeSystem_timeEventTimeSetSntp)) {
-        xEventGroupSetBits(timeEvents, timeEventTimeSetSntp);
+        xEventGroupSetBits(extEvents, extEventTimeSetSntp);
     }
 }
 
@@ -744,6 +753,36 @@ void IrrigationController::timeSytemEventsHookDispatch(void* param, time_system_
             controller->timeSytemEventHandler(events);
         }
     }
+}
+
+/**
+ * @brief Static hook dispatcher, which delegates irrigation config update events to the correct IrrigationController
+ * instance.
+ * 
+ * @param param Pointer to the actual IrrigationController instance
+ */
+void IrrigationController::irrigConfigUpdatedHookDispatch(void* param)
+{
+    IrrigationController* controller = (IrrigationController*) param;
+
+    if(nullptr == controller) {
+        ESP_LOGE("unkown", "No valid IrrigationController available to dispatch time system events to!");
+    } else {
+        controller->irrigConfigUpdatedEventHandler();
+    }
+}
+
+/**
+ * @brief This function handles events when a configuration update has been received.
+ * 
+ * This is important for the main processing thread to properly react to schedule
+ * updates.
+ * 
+ */
+void IrrigationController::irrigConfigUpdatedEventHandler()
+{
+    // set an event group bit for the processing task
+    xEventGroupSetBits(extEvents, extEventIrrigConfigUpdated);
 }
 
 
