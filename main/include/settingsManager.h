@@ -31,20 +31,27 @@ public:
         ERR_INVALID_JSON = -3,
         ERR_SETTINGS_INVALID = -4,
         ERR_PARSING_ERR = -5,
+        ERR_FILE_IO = -6
     } err_t;
 
     SettingsManager();
     ~SettingsManager();
 
     err_t updateIrrigationConfig(const char* const jsonData, int jsonDataLen);
+    err_t readIrrigationConfigFile();
+
     err_t copyZonesAndEvents(irrigation_zone_cfg_t* zones, IrrigationEvent* events, bool* eventsUsed);
 
 private:
     const char* logTag = "settings_mgr";
 
-    const TickType_t lockAcquireTimeout = pdMS_TO_TICKS(1000);          /**< Maximum config lock acquisition time in OS ticks. */
+    const TickType_t lockAcquireTimeout = pdMS_TO_TICKS(1000);          /**< Maximum lock acquisition time in OS ticks. */
+
     SemaphoreHandle_t configMutex;
     StaticSemaphore_t configMutexBuf;
+
+    SemaphoreHandle_t fileIoMutex;
+    StaticSemaphore_t fileIoMutexBuf;
 
     typedef struct settings_container_t {
         irrigation_zone_cfg_t zones[irrigationPlannerNumZones];         /**< Storage holding irrigation zone configurations. */

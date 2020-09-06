@@ -321,30 +321,14 @@ void mqttIrrigConfigSetCallback(const char* topic, int topicLen, const char* dat
 esp_err_t initializeSettingsMgr(void)
 {
     esp_err_t ret = ESP_OK;
+    bool irrigationConfigRead = false;
 
     // setup default data
     settingsMgr.updateIrrigationConfig((const char*) irrigationConfig_default_json_start, irrigationConfig_default_json_end - irrigationConfig_default_json_start + 1);
 
     // try to read irrigation config file from SPIFFS
-    bool irrigationConfigRead = false;
-    struct stat st;
-    if (stat(filepathConfigStore, &st) == 0) {
-        FILE* f = fopen(filepathConfigStore, "r");
-        if (f == NULL) {
-            ESP_LOGW(LOG_TAG_SPIFFS, "Failed to open irrigation config file for reading.");
-        } else {
-            static char settingsBuffer[4096];
-            size_t bytesRead;
-            bytesRead = fread(settingsBuffer, sizeof(char), sizeof(settingsBuffer), f);
-            fclose(f);
-
-            if(bytesRead == sizeof(settingsBuffer)) {
-                ESP_LOGW(LOG_TAG_SPIFFS, "Irrigation config file too big for read buffer. Not reading it in.");
-            } else if(bytesRead > 0) {
-                ESP_LOGI(LOG_TAG_SPIFFS, "Updating irrigation config from file.");
-                settingsMgr.updateIrrigationConfig(settingsBuffer);
-            }
-        }
+    if (SettingsManager::ERR_OK == settingsMgr.readIrrigationConfigFile()) {
+        irrigationConfigRead = true;
     }
 
     // subscribe to the irrigation config topic

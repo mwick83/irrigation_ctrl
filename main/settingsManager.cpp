@@ -1,5 +1,7 @@
 #include "settingsManager.h"
 
+#include <stdio.h>
+
 #include "globalComponents.h"
 
 /**
@@ -12,6 +14,7 @@ SettingsManager::SettingsManager(void)
     clearEventData(shadowData);
 
     configMutex = xSemaphoreCreateMutexStatic(&configMutexBuf);
+    fileIoMutex = xSemaphoreCreateMutexStatic(&fileIoMutexBuf);
 }
 
 /**
@@ -20,6 +23,7 @@ SettingsManager::SettingsManager(void)
 SettingsManager::~SettingsManager(void)
 {
     if(configMutex) vSemaphoreDelete(configMutex);
+    if(fileIoMutex) vSemaphoreDelete(fileIoMutex);
 }
 
 void SettingsManager::clearZoneData(settings_container_t& settings)
@@ -176,7 +180,7 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
     if (jsonDataLen < 2) return ERR_INVALID_ARG; // check for minimum data length ("{}")
     if (jsonDataLen > 4095) return ERR_INVALID_ARG; // chekc for maximum buffer space
 
-    if(pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
+    if (pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
         ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
         ret = ERR_TIMEOUT;
     } else {
@@ -255,6 +259,46 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
         }
 
         pwrMgr.setKeepAwakeForce(false);
+    }
+
+    return ret;
+}
+
+SettingsManager::err_t SettingsManager::readIrrigationConfigFile()
+{
+    err_t ret = ERR_OK;
+    static char settingsBuffer[4096];
+
+    struct stat st;
+    if (stat(filenameIrrigationConfig, &st) == 0) {
+        if (pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
+            ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
+            ret = ERR_TIMEOUT;
+        } else {
+            FILE* f = fopen(filenameIrrigationConfig, "r");
+            if (f == NULL) {
+                ESP_LOGW(logTag, "Failed to open irrigation config file for reading.");
+                ret = ERR_FILE_IO;
+            } else {
+                size_t bytesRead;
+
+                bytesRead = fread(settingsBuffer, sizeof(char), sizeof(settingsBuffer), f);
+                fclose(f);
+
+                if(bytesRead == sizeof(settingsBuffer)) {
+                    ESP_LOGW(logTag, "Irrigation config file too big for read buffer. Not reading it in.");
+                    ret = ERR_FILE_IO;
+                } else if(bytesRead > 0) {
+                    ESP_LOGI(logTag, "Updating irrigation config from file.");
+                    ret = updateIrrigationConfig(settingsBuffer, bytesRead);
+                }
+
+            }
+            xSemaphoreGive(configMutex);
+        }
+    } else {
+        ESP_LOGW(logTag, "Irrigation config file doesn't exist.");
+        ret = ERR_FILE_IO;
     }
 
     return ret;
