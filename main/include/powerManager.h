@@ -46,7 +46,9 @@ private:
     StaticSemaphore_t peripheralExtSupplyMutexBuf;
     bool peripheralExtSupplyState;
 
-    bool keepAwakeForcedState;
+    SemaphoreHandle_t keepAwakeForcedSem;
+    StaticSemaphore_t keepAwakeForcedSemBuf;
+
     bool keepAwakeAtBootState;
 
 public:

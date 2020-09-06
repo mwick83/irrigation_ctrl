@@ -1,5 +1,7 @@
 #include "powerManager.h"
 
+#include <limits>
+
 PowerManager::PowerManager(void)
 {
     // setup ADC for battery voltage conversion
@@ -38,13 +40,12 @@ PowerManager::PowerManager(void)
 
     peripheralEnMutex = xSemaphoreCreateMutexStatic(&peripheralEnMutexBuf);
     peripheralExtSupplyMutex = xSemaphoreCreateMutexStatic(&peripheralExtSupplyMutexBuf);
+    keepAwakeForcedSem = xSemaphoreCreateCountingStatic(std::numeric_limits<UBaseType_t>::max(), 0, &keepAwakeForcedSemBuf);
 
     // setup keep awake GPIO and forced state
     rtc_gpio_deinit(keepAwakeGpioNum); // regain access from RTC IO block
     gpio_set_direction(keepAwakeGpioNum, GPIO_MODE_INPUT);
     gpio_set_pull_mode(keepAwakeGpioNum, GPIO_FLOATING); // board has an external pull
-
-    keepAwakeForcedState = false;
 
     // TBD: wait for settlement of IO?
     keepAwakeAtBootState = gpio_get_level(keepAwakeGpioNum);
@@ -151,13 +152,20 @@ bool PowerManager::getKeepAwake(void)
 
 void PowerManager::setKeepAwakeForce(bool en)
 {
-    // TBD: implement with a counting semaphore to support setting by multiple sources?
-    keepAwakeForcedState = en;
+    if (en == true) {
+        if (pdTRUE != xSemaphoreGive(keepAwakeForcedSem)) {
+            ESP_LOGE(logTag, "Couldn't increase keepAwakeForced semaphore. Most likely keep awake won't be forced properly now!");
+        }
+    } else {
+        if (pdTRUE != xSemaphoreTake(keepAwakeForcedSem, portMAX_DELAY)) {
+            ESP_LOGE(logTag, "Couldn't decrease keepAwakeForced semaphore. Most likely we'll be stuck in keep awake now!");
+        }
+    }
 }
 
 bool PowerManager::getKeepAwakeForce(void)
 {
-    return keepAwakeForcedState;
+    return (uxSemaphoreGetCount(keepAwakeForcedSem) != 0);
 }
 
 bool PowerManager::getKeepAwakeIo(void)
