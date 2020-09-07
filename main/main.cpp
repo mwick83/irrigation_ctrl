@@ -321,14 +321,11 @@ void mqttIrrigConfigSetCallback(const char* topic, int topicLen, const char* dat
 esp_err_t initializeSettingsMgr(void)
 {
     esp_err_t ret = ESP_OK;
-    bool irrigationConfigRead = false;
-
-    // setup default data
-    settingsMgr.updateIrrigationConfig((const char*) irrigationConfig_default_json_start, irrigationConfig_default_json_end - irrigationConfig_default_json_start + 1);
 
     // try to read irrigation config file from SPIFFS
-    if (SettingsManager::ERR_OK == settingsMgr.readIrrigationConfigFile()) {
-        irrigationConfigRead = true;
+    if (SettingsManager::ERR_OK != settingsMgr.readIrrigationConfigFile()) {
+        // setup default data
+        settingsMgr.updateIrrigationConfig((const char*) irrigationConfig_default_json_start, irrigationConfig_default_json_end - irrigationConfig_default_json_start + 1);
     }
 
     // subscribe to the irrigation config topic
@@ -350,152 +347,6 @@ esp_err_t initializeSettingsMgr(void)
         }
     } else {
         ESP_LOGW(LOG_TAG_OTA, "Failed to get WiFi MAC address for irrigation config topic subscription.");
-    }
-
-    if (!irrigationConfigRead) {
-        ESP_LOGW(LOG_TAG_SPIFFS, "Falling back to hard-coded config.");
-        // temporarily load real config
-        static const char defSettings[] =
-"{ \n"
-"    \"storePersistent\": false, \n"
-"    \n"
-"    \"zones\": [ \n"
-"        { \n"
-"            \"name\": \"MAIN\", \n"
-"            \"chEnabled\": [true, false, false, false], \n"
-"            \"chNum\": [0, -1, -1, -1], \n"
-"            \"chStateStart\": [true, false, false, false], \n"
-"            \"chStateStop\": [false, false, false, false] \n"
-"        }, \n"
-"        { \n"
-"            \"name\": \"AUX0\", \n"
-"            \"chEnabled\": [true, false, false, false], \n"
-"            \"chNum\": [1, -1, -1, -1], \n"
-"            \"chStateStart\": [true, false, false, false], \n"
-"            \"chStateStop\": [false, false, false, false] \n"
-"        }, \n"
-"        { \n"
-"            \"name\": \"AUX1\", \n"
-"            \"chEnabled\": [true, false, false, false], \n"
-"            \"chNum\": [2, -1, -1, -1], \n"
-"            \"chStateStart\": [true, false, false, false], \n"
-"            \"chStateStop\": [false, false, false, false] \n"
-"        } \n"
-"    ], \n"
-"    \n"
-"    \"events\": [ \n"
-"        { \n"
-"            \"zoneNum\": 0, \n"
-"            \"durationSecs\": 60, \n"
-"            \"isSingle\": false, \n"
-"            \"isDaily\": true, \n"
-"            \"hour\": 8, \n"
-"            \"minute\": 0, \n"
-"            \"second\": 0, \n"
-"            \"day\": 0, \n"
-"            \"month\": 0, \n"
-"            \"year\": 0 \n"
-"        }, \n"
-"        { \n"
-"            \"zoneNum\": 0, \n"
-"            \"durationSecs\": 60, \n"
-"            \"isSingle\": false, \n"
-"            \"isDaily\": true, \n"
-"            \"hour\": 15, \n"
-"            \"minute\": 0, \n"
-"            \"second\": 0, \n"
-"            \"day\": 0, \n"
-"            \"month\": 0, \n"
-"            \"year\": 0 \n"
-"        }, \n"
-"        { \n"
-"            \"zoneNum\": 0, \n"
-"            \"durationSecs\": 60, \n"
-"            \"isSingle\": false, \n"
-"            \"isDaily\": true, \n"
-"            \"hour\": 21, \n"
-"            \"minute\": 0, \n"
-"            \"second\": 0, \n"
-"            \"day\": 0, \n"
-"            \"month\": 0, \n"
-"            \"year\": 0 \n"
-"        }, \n"
-"        { \n"
-"            \"zoneNum\": 2, \n"
-"            \"durationSecs\": 45, \n"
-"            \"isSingle\": false, \n"
-"            \"isDaily\": true, \n"
-"            \"hour\": 8, \n"
-"            \"minute\": 0, \n"
-"            \"second\": 15, \n"
-"            \"day\": 0, \n"
-"            \"month\": 0, \n"
-"            \"year\": 0 \n"
-"        }, \n"
-"        { \n"
-"            \"zoneNum\": 2, \n"
-"            \"durationSecs\": 45, \n"
-"            \"isSingle\": false, \n"
-"            \"isDaily\": true, \n"
-"            \"hour\": 15, \n"
-"            \"minute\": 0, \n"
-"            \"second\": 15, \n"
-"            \"day\": 0, \n"
-"            \"month\": 0, \n"
-"            \"year\": 0 \n"
-"        }, \n"
-"        { \n"
-"            \"zoneNum\": 2, \n"
-"            \"durationSecs\": 45, \n"
-"            \"isSingle\": false, \n"
-"            \"isDaily\": true, \n"
-"            \"hour\": 21, \n"
-"            \"minute\": 0, \n"
-"            \"second\": 15, \n"
-"            \"day\": 0, \n"
-"            \"month\": 0, \n"
-"            \"year\": 0 \n"
-"        }, \n"
-"        { \n"
-"            \"zoneNum\": 1, \n"
-"            \"durationSecs\": 30, \n"
-"            \"isSingle\": false, \n"
-"            \"isDaily\": true, \n"
-"            \"hour\": 8, \n"
-"            \"minute\": 0, \n"
-"            \"second\": 20, \n"
-"            \"day\": 0, \n"
-"            \"month\": 0, \n"
-"            \"year\": 0 \n"
-"        }, \n"
-"        { \n"
-"            \"zoneNum\": 1, \n"
-"            \"durationSecs\": 30, \n"
-"            \"isSingle\": false, \n"
-"            \"isDaily\": true, \n"
-"            \"hour\": 15, \n"
-"            \"minute\": 0, \n"
-"            \"second\": 20, \n"
-"            \"day\": 0, \n"
-"            \"month\": 0, \n"
-"            \"year\": 0 \n"
-"        }, \n"
-"        { \n"
-"            \"zoneNum\": 1, \n"
-"            \"durationSecs\": 30, \n"
-"            \"isSingle\": false, \n"
-"            \"isDaily\": true, \n"
-"            \"hour\": 21, \n"
-"            \"minute\": 0, \n"
-"            \"second\": 20, \n"
-"            \"day\": 0, \n"
-"            \"month\": 0, \n"
-"            \"year\": 0 \n"
-"        } \n"
-"    ] \n"
-"} \n";
-
-        settingsMgr.updateIrrigationConfig(defSettings, strlen(defSettings));
     }
 
     return ret;
