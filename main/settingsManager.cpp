@@ -256,19 +256,13 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
         if( (nullptr != storePersistentPtr) && cJSON_IsBool(storePersistentPtr) && cJSON_IsTrue(storePersistentPtr) ) {
             ESP_LOGI(logTag, "Persistent storage of irrigation configuration requested.");
 
-            cJSON* storePersistentFalsePtr = cJSON_CreateBool(false);
-            if((nullptr == storePersistentFalsePtr) || (!cJSON_ReplaceItemViaPointer(root, storePersistentPtr, storePersistentFalsePtr))) {
-                ESP_LOGE(logTag, "Removing presistancy flag before saving irrigation config failed. Aborting.");
-            } else {
-                if (ERR_OK != writeIrrigationConfigFile(jsonStr)) {
-                    ESP_LOGE(logTag, "Error saving irrigation configuration file.");
-                } else {
-                    ESP_LOGI(logTag, "Irrigation configuration saved successfully.");
-                }
-            }
+            cJSON_DetachItemViaPointer(root, storePersistentPtr);
 
-            if(nullptr != storePersistentFalsePtr) {
-                cJSON_Delete(storePersistentFalsePtr);
+            char* jsonStrModified = cJSON_Print(root);
+            int jsonStrModifiedLen = strlen(jsonStrModified);
+
+            if (ERR_OK != writeIrrigationConfigFile(jsonStrModified, jsonStrModifiedLen)) {
+                ret = ERR_FILE_IO;
             }
         }
 
@@ -323,9 +317,37 @@ SettingsManager::err_t SettingsManager::readIrrigationConfigFile()
     return ret;
 }
 
-SettingsManager::err_t SettingsManager::writeIrrigationConfigFile(const char* const jsonStr)
+SettingsManager::err_t SettingsManager::writeIrrigationConfigFile(const char* const jsonData, int jsonDataLen)
 {
-    return ERR_TIMEOUT;
+    err_t ret = ERR_OK;
+
+    if (pdFALSE == xSemaphoreTake(fileIoMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
+        ret = ERR_TIMEOUT;
+    } else {
+        FILE* f = fopen(filenameIrrigationConfig, "w");
+        if (f == NULL) {
+            ESP_LOGW(logTag, "Failed to open irrigation config file for writing.");
+            ret = ERR_FILE_IO;
+        } else {
+            size_t bytesWritten;
+
+            bytesWritten = fwrite(jsonData, sizeof(char), jsonDataLen, f);
+            fclose(f);
+
+            if(bytesWritten != jsonDataLen) {
+                ESP_LOGW(logTag, "Error writing irrigation config file. Deleting it.");
+                unlink(filenameIrrigationConfig);
+                ret = ERR_FILE_IO;
+            } else {
+                ESP_LOGI(logTag, "Irrigation config file written successfully.");
+            }
+
+        }
+        xSemaphoreGive(fileIoMutex);
+    }
+
+    return ret;
 }
 
 SettingsManager::err_t SettingsManager::copyZonesAndEvents(

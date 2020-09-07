@@ -67,7 +67,7 @@ private:
     err_t jsonParseZone(cJSON* zoneJson, irrigation_zone_cfg_t& zoneCfg);
     err_t jsonParseEvent(cJSON* evtJson, IrrigationEvent& evt, bool& used);
 
-    err_t writeIrrigationConfigFile(const char* const jsonStr);
+    err_t writeIrrigationConfigFile(const char* const jsonData, int jsonDataLen);
 };
 
 #endif /* SETTINGS_MANAGER_H */
