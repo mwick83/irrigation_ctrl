@@ -291,7 +291,7 @@ SettingsManager::err_t SettingsManager::readIrrigationConfigFile()
 
     struct stat st;
     if (stat(filenameIrrigationConfig, &st) == 0) {
-        if (pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
+        if (pdFALSE == xSemaphoreTake(fileIoMutex, lockAcquireTimeout)) {
             ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
             ret = ERR_TIMEOUT;
         } else {
@@ -312,9 +312,8 @@ SettingsManager::err_t SettingsManager::readIrrigationConfigFile()
                     ESP_LOGI(logTag, "Updating irrigation config from file.");
                     ret = updateIrrigationConfig(settingsBuffer, bytesRead);
                 }
-
             }
-            xSemaphoreGive(configMutex);
+            xSemaphoreGive(fileIoMutex);
         }
     } else {
         ESP_LOGW(logTag, "Irrigation config file doesn't exist.");
