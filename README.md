@@ -134,14 +134,6 @@ The state info contains internal and external sensor data as well as system stat
 
 I have chosen to publish the voltage and reservoir fill level in mV and "percent multiplied 10" to prevent the usage of floating point variables as much as possible.
 
-### SNTP handling
-
-The control logic requires to be notified of changes in the system time to work properly. Manually setting the time through the debug console is no problem at all, because I have all the software under my control. But the SNTP implementation is part of the lwIP stack used in the ESP-IDF. It doesn't signalize any state changes at all. According to a [discussion on Github](https://github.com/espressif/esp-idf/pull/1668), I'm not the only one needing such a feature and it looks like it's already in development.
-
-As the time of writing and implementing SNTP properly in the control logic, the internal patch wasn't made public. Therefore, I modified the weak-hook patch shown in the thread above. It is available in here as [sntp.patch](sntp.patch). It must be applied to the ESP-IDF checkout. The timeSystem.cpp re-implements these weak functions to interface with the SNTP code of lwIP.
-
-ToBeDone: Update flow charts above with the SNTP implementation.
-
 ## Compiling and running
 
 The project is a plain ESP-IDF project. It provides a good way to include external components into the compile flow. They are either included as git submodules or simple sub directories in the 'components' dir.

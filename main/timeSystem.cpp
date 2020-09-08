@@ -10,8 +10,7 @@
 #include "freertos/event_groups.h"
 
 #include "esp_log.h"
-
-#include "lwip/apps/sntp.h"
+#include "esp_sntp.h"
 
 #include "wifiEvents.h"
 
@@ -36,35 +35,17 @@ SemaphoreHandle_t TimeSystem_HookMutex;
 StaticSemaphore_t TimeSystem_HookMutexBuf;
 
 // ********************************************************************
-// SNTP setsystime overrides (requires patched ESP-IDF!)
+// SNTP time sync callback
 // ********************************************************************
-#ifdef __cplusplus
-extern "C" {
-#endif
-void sntp_setsystemtime_us(time_t t, suseconds_t us)
+void TimeSystem_SntpTimeSyncCb(struct timeval *tv)
 {
-    SNTP_SET_SYSTEM_TIME_US(t, us);
-    sntpLastSync = t;
+    time(&sntpLastSync);
 
     ESP_LOGI(LOG_TAG_TIME, "Time set via SNTP. Setting timeEvents.");
     xEventGroupSetBits(timeEvents, TimeSystem_timeEventTimeSet | TimeSystem_timeEventTimeSetSntp);
     TimeSystem_CallHooks(TimeSystem_timeEventTimeSet | TimeSystem_timeEventTimeSetSntp);
     TimeSystem_LogTime();
 }
-
-void sntp_setsystemtime(time_t t)
-{
-    SNTP_SET_SYSTEM_TIME(t);
-    sntpLastSync = t;
-
-    ESP_LOGI(LOG_TAG_TIME, "Time set via SNTP. Setting timeEvents.");
-    xEventGroupSetBits(timeEvents, TimeSystem_timeEventTimeSet | TimeSystem_timeEventTimeSetSntp);
-    TimeSystem_CallHooks(TimeSystem_timeEventTimeSet | TimeSystem_timeEventTimeSetSntp);
-    TimeSystem_LogTime();
-}
-#ifdef __cplusplus
-}
-#endif
 
 // ********************************************************************
 // time system initialization
@@ -79,6 +60,9 @@ extern "C" void TimeSystem_Init(void)
     TimeSystem_HookParamPtrs.clear();
 
     TimeSystem_HookMutex = xSemaphoreCreateMutexStatic(&TimeSystem_HookMutexBuf);
+
+    // register a hook into the SNTP code
+    sntp_set_time_sync_notification_cb(TimeSystem_SntpTimeSyncCb);
 
     ESP_LOGI(LOG_TAG_TIME, "Checking if time is already set.");
     time(&now);
