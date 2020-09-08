@@ -28,51 +28,6 @@ IrrigationPlanner::IrrigationPlanner()
         stopEventsUsed[i] = false;
     }
 
-    /*
-    // Setup fixed zones
-    strncpy(zones[0].name, "MAIN", irrigationZoneCfgNameLen);
-    zones[0].chEnabled[0] = true;
-    zones[0].chNum[0] = OutputController::CH_MAIN;
-    zones[0].chStateStart[0] = true;
-    zones[0].chStateStop[0] = false;
-
-    strncpy(zones[1].name, "AUX0", irrigationZoneCfgNameLen);
-    zones[1].chEnabled[0] = true;
-    zones[1].chNum[0] = OutputController::CH_AUX0;
-    zones[1].chStateStart[0] = true;
-    zones[1].chStateStop[0] = false;
-
-    strncpy(zones[2].name, "AUX1", irrigationZoneCfgNameLen);
-    zones[2].chEnabled[0] = true;
-    zones[2].chNum[0] = OutputController::CH_AUX1;
-    zones[2].chStateStart[0] = true;
-    zones[2].chStateStop[0] = false;
-
-    // Setup a fixed irrigation plan for now:
-    // 3 times a day enable the pump (on channel 'main').
-    const int hours[] = {8, 12, 21};
-    const int numHours = sizeof(hours)/sizeof(hours[0]);
-    for(int i = 0; i < numHours; i++) {
-        events[i*numHours].setDailyRepetition(hours[i], 0, 0);
-        events[i*numHours].setStartFlag(true);
-        events[i*numHours].setDuration(60);
-        events[i*numHours].setZoneIndex(0);
-        eventsUsed[i*numHours] = true;
-
-        events[i*numHours+1].setDailyRepetition(hours[i], 0, 15);
-        events[i*numHours+1].setStartFlag(true);
-        events[i*numHours+1].setDuration(45);
-        events[i*numHours+1].setZoneIndex(2);
-        eventsUsed[i*numHours+1] = true;
-
-        events[i*numHours+2].setDailyRepetition(hours[i], 0, 20);
-        events[i*numHours+2].setStartFlag(true);
-        events[i*numHours+2].setDuration(30);
-        events[i*numHours+2].setZoneIndex(1);
-        eventsUsed[i*numHours+2] = true;
-    }
-    */
-
     #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
     printAllEvents();
     #endif
