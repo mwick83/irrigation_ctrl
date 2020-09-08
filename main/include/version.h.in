@@ -1,0 +1,12 @@
+#ifndef VERSION_H
+#define VERSION_H
+
+#define PACKAGE_NAME "Irrigation Controller"
+#define PACKAGE_VERSION "0.7"
+#define GIT_SHA1 "@GIT_SHA1@"
+
+#define VERSION_STRING (PACKAGE_NAME " " PACKAGE_VERSION " (git:" GIT_SHA1 ")")
+
+#define OTA_VERSION_STRING (PACKAGE_VERSION "-" GIT_SHA1)
+
+#endif

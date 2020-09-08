@@ -11,6 +11,7 @@ build/
 .vscode/
 unused_code/
 /main/include/networkConfig.h
+/main/include/version.h
 /settings.txt
 /doc/html/
 /Makefile.ota.incl
