@@ -17,3 +17,4 @@ unused_code/
 /Makefile.ota.incl
 /main/ota_host_public_key.pem
 /main/ota_root_ca_cert.pem
+/irrigationConfig.*.json
