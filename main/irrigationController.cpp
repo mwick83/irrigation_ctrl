@@ -398,7 +398,7 @@ void IrrigationController::taskFunc()
 
             // Skip resync in case an upcoming event is close
             millisTillNextEvent = (int) round(difftime(nextIrrigEvent, time(nullptr)) * 1000.0);
-            if(millisTillNextEvent <= noSntpResyncRangeMillis) {
+            if((nextIrrigEvent != 0) && (millisTillNextEvent <= noSntpResyncRangeMillis)) {
                 skipSntpResync = true;
                 ESP_LOGD(logTag, "Skipping SNTP (re)sync, because next upcoming event is too close.");
             }
