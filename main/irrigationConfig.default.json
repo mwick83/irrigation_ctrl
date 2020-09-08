@@ -1,0 +1,30 @@
+{
+  "storePersistent": false,
+  
+  "zones": [
+    {
+      "name": "MAIN",
+      "chEnabled": [true, false, false, false],
+      "chNum": [0, -1, -1, -1],
+      "chStateStart": [true, false, false, false],
+      "chStateStop": [false, false, false, false]
+    },
+    {
+      "name": "AUX0",
+      "chEnabled": [true, false, false, false],
+      "chNum": [1, -1, -1, -1],
+      "chStateStart": [true, false, false, false],
+      "chStateStop": [false, false, false, false]
+    },
+    {
+      "name": "AUX1",
+      "chEnabled": [true, false, false, false],
+      "chNum": [2, -1, -1, -1],
+      "chStateStart": [true, false, false, false],
+      "chStateStop": [false, false, false, false]
+    }
+  ],
+  
+  "events": [
+  ]
+}

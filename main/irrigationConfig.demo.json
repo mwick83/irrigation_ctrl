@@ -1,0 +1,138 @@
+{
+    "storePersistent": true,
+   
+    "zones": [
+        {
+            "name": "MAIN",
+            "chEnabled": [true, false, false, false],
+            "chNum": [0, -1, -1, -1],
+            "chStateStart": [true, false, false, false],
+            "chStateStop": [false, false, false, false]
+        },
+        {
+            "name": "AUX0",
+            "chEnabled": [true, false, false, false],
+            "chNum": [1, -1, -1, -1],
+            "chStateStart": [true, false, false, false],
+            "chStateStop": [false, false, false, false]
+        },
+        {
+            "name": "AUX1",
+            "chEnabled": [true, false, false, false],
+            "chNum": [2, -1, -1, -1],
+            "chStateStart": [true, false, false, false],
+            "chStateStop": [false, false, false, false]
+        }
+    ],
+   
+    "events": [
+        {
+            "zoneNum": 0,
+            "durationSecs": 60,
+            "isSingle": false,
+            "isDaily": true,
+            "hour": 8,
+            "minute": 0,
+            "second": 0,
+            "day": 0,
+            "month": 0,
+            "year": 0
+        },
+        {
+            "zoneNum": 0,
+            "durationSecs": 60,
+            "isSingle": false,
+            "isDaily": true,
+            "hour": 15,
+            "minute": 0,
+            "second": 0,
+            "day": 0,
+            "month": 0,
+            "year": 0
+        },
+        {
+            "zoneNum": 0,
+            "durationSecs": 60,
+            "isSingle": false,
+            "isDaily": true,
+            "hour": 21,
+            "minute": 0,
+            "second": 0,
+            "day": 0,
+            "month": 0,
+            "year": 0
+        },
+        {
+            "zoneNum": 2,
+            "durationSecs": 45,
+            "isSingle": false,
+            "isDaily": true,
+            "hour": 8,
+            "minute": 0,
+            "second": 15,
+            "day": 0,
+            "month": 0,
+            "year": 0
+        },
+        {
+            "zoneNum": 2,
+            "durationSecs": 45,
+            "isSingle": false,
+            "isDaily": true,
+            "hour": 15,
+            "minute": 0,
+            "second": 15,
+            "day": 0,
+            "month": 0,
+            "year": 0
+        },
+        {
+            "zoneNum": 2,
+            "durationSecs": 45,
+            "isSingle": false,
+            "isDaily": true,
+            "hour": 21,
+            "minute": 0,
+            "second": 15,
+            "day": 0,
+            "month": 0,
+            "year": 0
+        },
+        {
+            "zoneNum": 1,
+            "durationSecs": 30,
+            "isSingle": false,
+            "isDaily": true,
+            "hour": 8,
+            "minute": 0,
+            "second": 20,
+            "day": 0,
+            "month": 0,
+            "year": 0
+        },
+        {
+            "zoneNum": 1,
+            "durationSecs": 30,
+            "isSingle": false,
+            "isDaily": true,
+            "hour": 15,
+            "minute": 0,
+            "second": 20,
+            "day": 0,
+            "month": 0,
+            "year": 0
+        },
+        {
+            "zoneNum": 1,
+            "durationSecs": 30,
+            "isSingle": false,
+            "isDaily": true,
+            "hour": 21,
+            "minute": 0,
+            "second": 20,
+            "day": 0,
+            "month": 0,
+            "year": 0
+        }
+    ]
+}
