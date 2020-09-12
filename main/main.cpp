@@ -354,11 +354,16 @@ esp_err_t initializeSettingsMgr(void)
 
 void mqttIrrigConfigSetCallback(const char* topic, int topicLen, const char* data, int dataLen)
 {
-    if (SettingsManager::ERR_OK == settingsMgr.updateIrrigationConfig(data, dataLen)) {
+    static char topicBuf[MQTT_CONFIG_TOPIC_PRE_LEN+MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN+12+1];
+    strncpy(topicBuf, topic, MIN(sizeof(topicBuf)-1, topicLen));
+    topicBuf[MIN(sizeof(topicBuf), topicLen)] = 0;
+
+    if (SettingsManager::ERR_OK == settingsMgr.updateIrrigationConfig(data, dataLen, false)) {
         // TBD: publish state somewhere
     }
     // clear the topic, so we won't parse it again
-    //TBD: mqttMgr.publish(topic, nullptr, 0, MqttManager::QOS_EXACTLY_ONCE, true);
+    mqttMgr.publish(topicBuf, nullptr, 0, MqttManager::QOS_EXACTLY_ONCE, true);
+}
 }
 
 // ********************************************************************
