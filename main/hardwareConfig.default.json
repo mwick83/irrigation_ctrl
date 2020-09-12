@@ -1,0 +1,15 @@
+{
+  "storePersistent": false,
+  
+  "disableBatteryCheck": true,
+  "battCriticalThresholdMilli": 11900,
+  "battLowThresholdMilli": 12100,
+  "battOkThresholdMilli": 13800,
+  
+  "disableReservoirCheck": true,
+  "fillLevelMaxVal": 545,
+  "fillLevelMinVal": 0,
+  "fillLevelCriticalThresholdPercent10": 75,
+  "fillLevelLowThresholdPercent10": 250,
+  "fillLevelHysteresisPercent10": 50
+}
