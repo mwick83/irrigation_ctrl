@@ -2,7 +2,7 @@
 
 #include <limits>
 
-PowerManager::PowerManager(void)
+PowerManager::PowerManager()
 {
     // setup ADC for battery voltage conversion
     // 11db attenuation is pretty non-linear, so use 6db -> max measurable input voltage ~2.2V -> 22V
@@ -49,9 +49,14 @@ PowerManager::PowerManager(void)
 
     // TBD: wait for settlement of IO?
     keepAwakeAtBootState = gpio_get_level(keepAwakeGpioNum);
+
+    configMutex = xSemaphoreCreateMutexStatic(&configMutexBuf);
 }
 
-// TBD: implement destructor for resource cleanup
+PowerManager::~PowerManager()
+{
+    if (configMutex) vSemaphoreDelete(configMutex);
+}
 
 uint32_t PowerManager::getSupplyVoltageMilli(void)
 {
@@ -92,12 +97,17 @@ PowerManager::batt_state_t PowerManager::getBatteryState(uint32_t millis)
 {
     batt_state_t state = BATT_CRITICAL;
 
-    if(millis >= battOkThresholdMilli) {
-        state = BATT_FULL;
-    } else if(millis >= battLowThresholdMilli) {
-        state = BATT_OK;
-    } else if(millis >= battCriticalThresholdMilli) {
-        state = BATT_LOW;
+    if (pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
+    } else {
+        if(millis >= battOkThresholdMilli) {
+            state = BATT_FULL;
+        } else if(millis >= battLowThresholdMilli) {
+            state = BATT_OK;
+        } else if(millis >= battCriticalThresholdMilli) {
+            state = BATT_LOW;
+        }
+        xSemaphoreGive(configMutex);
     }
 
     return state;

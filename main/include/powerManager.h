@@ -51,6 +51,11 @@ private:
 
     bool keepAwakeAtBootState;
 
+    const TickType_t lockAcquireTimeout = pdMS_TO_TICKS(1000);          /**< Maximum lock acquisition time in OS ticks. */
+
+    SemaphoreHandle_t configMutex;
+    StaticSemaphore_t configMutexBuf;
+
 public:
     typedef enum {
         BATT_FULL = 0,
@@ -60,7 +65,8 @@ public:
         BATT_DISABLED = 4
     } batt_state_t;
 
-    PowerManager(void);
+    PowerManager();
+    ~PowerManager();
 
     uint32_t getSupplyVoltageMilli(void);
     batt_state_t getBatteryState(uint32_t millis);
