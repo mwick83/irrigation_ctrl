@@ -208,6 +208,8 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
         ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
         ret = ERR_TIMEOUT;
     } else {
+        ESP_LOGI(logTag, "Parsing irrigation config update.");
+
         static irrigation_config_t settingsTemp;
 
         pwrMgr.setKeepAwakeForce(true);
@@ -268,7 +270,7 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
         }
 
         if(ret == ERR_OK) {
-            ESP_LOGD(logTag, "Zone and event data successfully parsed.");
+            ESP_LOGI(logTag, "Zone and event data successfully parsed.");
             memcpy(shadowDataIrrigationConfig.zones, settingsTemp.zones, sizeof(irrigation_zone_cfg_t) * irrigationZoneCfgElements);
             for(int i = 0; i < irrigationPlannerNumNormalEvents; i++) {
                 shadowDataIrrigationConfig.events[i] = settingsTemp.events[i];
@@ -315,6 +317,8 @@ SettingsManager::err_t SettingsManager::updateHardwareConfig(const char* const j
         ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
         ret = ERR_TIMEOUT;
     } else {
+        ESP_LOGI(logTag, "Parsing hardware config update.");
+
         static battery_config_t batteryTemp;
         static reservoir_config_t reservoirTemp;
 
@@ -368,7 +372,7 @@ SettingsManager::err_t SettingsManager::updateHardwareConfig(const char* const j
         }
 
         if(ret == ERR_OK) {
-            ESP_LOGD(logTag, "Hardware config successfully parsed.");
+            ESP_LOGI(logTag, "Hardware config successfully parsed.");
             copyBatteryConfigInt(&shadowDataBatteryConfig, batteryTemp);
             copyReservoirConfigInt(&shadowDataReservoirConfig, reservoirTemp);
         }
