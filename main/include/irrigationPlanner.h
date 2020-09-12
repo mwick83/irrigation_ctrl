@@ -37,6 +37,7 @@ public:
         ERR_NO_HANDLES_FOUND = -4,
         ERR_NO_STOP_SLOT_AVAIL = -5,
         ERR_INVALID_ZONE_IDX = -6,
+        ERR_TIMEOUT = -7
     } err_t;
 
     typedef struct event_handle_t {
@@ -78,6 +79,11 @@ private:
 
     IrrigConfigUpdateHookFncPtr configUpdatedHook;                  /**< Configuration updated hook function storage. */
     void* configUpdatedHookParamPtr;                                /**< Parameter storage for configuration updated hook function. */
+
+    const TickType_t lockAcquireTimeout = pdMS_TO_TICKS(1000);          /**< Maximum lock acquisition time in OS ticks. */
+
+    SemaphoreHandle_t hookMutex;
+    StaticSemaphore_t hookMutexBuf;
 
     int getNextEventIdx(time_t startTime, IrrigationEvent* eventList, bool* eventUsedList, unsigned int listElements);
     void printEventDetails(IrrigationEvent* evt);

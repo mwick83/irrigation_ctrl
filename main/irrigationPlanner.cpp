@@ -34,6 +34,8 @@ IrrigationPlanner::IrrigationPlanner()
 
     configUpdatedHook = nullptr;
     configUpdatedHookParamPtr = nullptr;
+
+    hookMutex = xSemaphoreCreateMutexStatic(&hookMutexBuf);
 }
 
 /**
@@ -54,6 +56,8 @@ IrrigationPlanner::~IrrigationPlanner()
     for(int i = 0; i < irrigationPlannerNumStopEvents; i++) {
         stopEventsUsed[i] = false;
     }
+
+    if (hookMutex) vSemaphoreDelete(hookMutex);
 }
 
 /**
@@ -485,15 +489,33 @@ void IrrigationPlanner::configurationUpdated()
         printAllEvents();
         #endif
 
-        if (nullptr != configUpdatedHook) {
-            configUpdatedHook(configUpdatedHookParamPtr);
+
+            if(pdFALSE == xSemaphoreTake(hookMutex, lockAcquireTimeout)) {
+                ESP_LOGE(logTag, "Couldn't acquire hook lock within timeout!");
+            } else {
+                if (nullptr != configUpdatedHook) {
+                    configUpdatedHook(configUpdatedHookParamPtr);
+                }
+                xSemaphoreGive(hookMutex);
+            }
         }
     }
 }
 
-void IrrigationPlanner::registerConfigurationUpdatedHook(IrrigConfigUpdateHookFncPtr hook, void* param)
+IrrigationPlanner::err_t IrrigationPlanner::registerIrrigPlanUpdatedHook(IrrigConfigUpdateHookFncPtr hook, void* param)
 {
-    // TBD: implement list of hooks if needed
-    configUpdatedHook = hook;
-    configUpdatedHookParamPtr = param;
+    err_t ret = ERR_OK;
+
+    if(pdFALSE == xSemaphoreTake(hookMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire hook lock within timeout!");
+        ret = ERR_TIMEOUT;
+    } else {
+        // TBD: implement list of hooks if needed
+        configUpdatedHook = hook;
+        configUpdatedHookParamPtr = param;
+
+        xSemaphoreGive(hookMutex);
+    }
+
+    return ret;
 }
