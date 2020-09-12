@@ -35,6 +35,7 @@ IrrigationPlanner::IrrigationPlanner()
     configUpdatedHook = nullptr;
     configUpdatedHookParamPtr = nullptr;
 
+    configMutex = xSemaphoreCreateMutexStatic(&configMutexBuf);
     hookMutex = xSemaphoreCreateMutexStatic(&hookMutexBuf);
 }
 
@@ -57,6 +58,7 @@ IrrigationPlanner::~IrrigationPlanner()
         stopEventsUsed[i] = false;
     }
 
+    if (configMutex) vSemaphoreDelete(configMutex);
     if (hookMutex) vSemaphoreDelete(hookMutex);
 }
 
@@ -467,7 +469,7 @@ void IrrigationPlanner::setConfigLock(bool lockState)
     if ((lockState == false) && (configUpdatedDuringLock == true)) {
         ESP_LOGI(logTag, "Config lock released. Performing postponed configuration update.");
         configUpdatedDuringLock = false;
-        configurationUpdated();
+        irrigConfigUpdated();
     }
 }
 
@@ -476,19 +478,35 @@ bool IrrigationPlanner::getConfigLock()
     return configLock;
 }
 
-void IrrigationPlanner::configurationUpdated()
+void IrrigationPlanner::irrigConfigUpdatedHookDispatch(void* param)
 {
+    IrrigationPlanner* planner = (IrrigationPlanner*) param;
+
+    if(nullptr == planner) {
+        ESP_LOGE("unkown", "No valid IrrigationPlanner available to dispatch irrigation config events to!");
+    } else {
+        planner->irrigConfigUpdated();
+    }
+}
+
+void IrrigationPlanner::irrigConfigUpdated()
+{
+    // TBD: add configMutex
+
     if (configLock) {
         configUpdatedDuringLock = true;
-        ESP_LOGI(logTag, "Configuration update received during locked state. Postponing update.");
+        ESP_LOGI(logTag, "Irrigation config update notification received during locked state. Postponing update.");
     } else {
-        ESP_LOGI(logTag, "Configuration update received.");
-        settingsMgr.copyZonesAndEvents(zones, events, eventsUsed);
+        ESP_LOGI(logTag, "Irrigation config update notification received.");
 
-        #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
-        printAllEvents();
-        #endif
+        if (pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
+            ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
+        } else {
+            settingsMgr.copyZonesAndEvents(zones, events, eventsUsed);
 
+            #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
+            printAllEvents();
+            #endif
 
             if(pdFALSE == xSemaphoreTake(hookMutex, lockAcquireTimeout)) {
                 ESP_LOGE(logTag, "Couldn't acquire hook lock within timeout!");
@@ -498,6 +516,8 @@ void IrrigationPlanner::configurationUpdated()
                 }
                 xSemaphoreGive(hookMutex);
             }
+
+            xSemaphoreGive(configMutex);
         }
     }
 }

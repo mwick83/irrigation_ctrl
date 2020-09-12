@@ -60,8 +60,9 @@ public:
 
     err_t getZoneConfigPtr(int idx, irrigation_zone_cfg_t** cfg);
 
-    void configurationUpdated();
-    void registerConfigurationUpdatedHook(IrrigConfigUpdateHookFncPtr hook, void* param);
+    static void irrigConfigUpdatedHookDispatch(void* param);
+    void irrigConfigUpdated();
+    err_t registerIrrigPlanUpdatedHook(IrrigConfigUpdateHookFncPtr hook, void* param);
 
 private:
     const char* logTag = "irrig_planner";
@@ -81,6 +82,9 @@ private:
     void* configUpdatedHookParamPtr;                                /**< Parameter storage for configuration updated hook function. */
 
     const TickType_t lockAcquireTimeout = pdMS_TO_TICKS(1000);          /**< Maximum lock acquisition time in OS ticks. */
+
+    SemaphoreHandle_t configMutex;
+    StaticSemaphore_t configMutexBuf;
 
     SemaphoreHandle_t hookMutex;
     StaticSemaphore_t hookMutexBuf;

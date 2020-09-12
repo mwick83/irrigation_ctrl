@@ -84,13 +84,13 @@ private:
     /** Boottime compensation, due to the fact that the systick gets reset during boot */
     const int bootCompensationMillis = 1000;
 
-    /** Timeout in milliseconds to wait for WiFi connection */ // TBD: from config
+    /** Timeout in milliseconds to wait for WiFi connection */
     const int wifiConnectedWaitMillis = 16000;
-    /** Timeout in milliseconds to wait for an SNTP time resync */ // TBD: from config
+    /** Timeout in milliseconds to wait for an SNTP time resync */
     const int timeResyncWaitMillis = 2000;
-    /** Timeout in milliseconds to wait for a MQTT client connection */ // TBD: from config
+    /** Timeout in milliseconds to wait for a MQTT client connection */
     const int mqttConnectedWaitMillis = 3000;
-    /** Timeout in milliseconds to wait for the MQTT client publishing all messages */ // TBD: from config
+    /** Timeout in milliseconds to wait for the MQTT client publishing all messages */
     const int mqttAllPublishedWaitMillis = 4000;
 
     /** Nominal wakeup time in milliseconds when going into deep sleep (i.e. non-keepawake) */
@@ -129,9 +129,9 @@ private:
 
     /** If an event is this close, don't resync time via SNTP */
     const int noSntpResyncRangeMillis = 60000;
-    /** Time in hours after which a time resync via SNTP should be requested */ // TBD: from config
+    /** Time in hours after which a time resync via SNTP should be requested */
     const double sntpResyncIntervalHours = 4;
-    /** Time in minutes after which a time resync via SNTP should be requested in case it failed previously */ // TBD: from config
+    /** Time in minutes after which a time resync via SNTP should be requested in case it failed previously */
     const double sntpResyncIntervalFailMinutes = 10;
 
     /** Can be set to disable the reservoir check when irrigating */
@@ -208,10 +208,14 @@ private:
     static void irrigConfigUpdatedHookDispatch(void* param);
     void irrigConfigUpdatedEventHandler();
 
+    static void hardwareConfigUpdatedHookDispatch(void* param);
+    void hardwareConfigUpdatedEventHandler();
+
     EventGroupHandle_t extEvents;
     const int extEventTimeSet = (1<<0);
     const int extEventTimeSetSntp = (1<<1);
     const int extEventIrrigConfigUpdated = (1<<2);
+    const int extEventHardwareConfigUpdated = (1<<3);
 };
 
 #endif /* IRRIGATION_CONTROLLER_H */

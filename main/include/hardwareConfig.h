@@ -48,8 +48,4 @@ static const gpio_num_t irrigationAux1GpioNum = GPIO_NUM_26;
 
 static const gpio_num_t keepAwakeGpioNum = GPIO_NUM_34;
 
-static const int battCriticalThresholdMilli = 11900;
-static const int battLowThresholdMilli = 12100;
-static const int battOkThresholdMilli = 13800;
-
 #endif /* HARDWARE_CONFIG_H */

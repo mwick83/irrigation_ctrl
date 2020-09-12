@@ -3,30 +3,54 @@
 #include <stdio.h>
 
 #include "globalComponents.h"
+#include "irrigationController.h"
+extern IrrigationController irrigCtrl;
+
+extern const uint8_t irrigationConfig_default_json_start[] asm("_binary_irrigationConfig_default_json_start");
+extern const uint8_t irrigationConfig_default_json_end[] asm("_binary_irrigationConfig_default_json_end");
+extern const uint8_t hardwareConfig_default_json_start[] asm("_binary_hardwareConfig_default_json_start");
+extern const uint8_t hardwareConfig_default_json_end[] asm("_binary_hardwareConfig_default_json_end");
 
 /**
  * @brief Default constructor, which performs basic initialization.
  */
-SettingsManager::SettingsManager(void)
+SettingsManager::SettingsManager()
 {
     // Clear event and zone shadow storages
-    clearZoneData(shadowData);
-    clearEventData(shadowData);
+    clearZoneData(shadowDataIrrigationConfig);
+    clearEventData(shadowDataIrrigationConfig);
 
     configMutex = xSemaphoreCreateMutexStatic(&configMutexBuf);
     fileIoMutex = xSemaphoreCreateMutexStatic(&fileIoMutexBuf);
+    hookMutex = xSemaphoreCreateMutexStatic(&hookMutexBuf);
+
+    for (int i=0; i<numHookTableEntries; i++) {
+        irrigConfigUpdatedHooks[i] = nullptr;
+        irrigConfigUpdatedHookParamPtrs[i] = nullptr;
+        hardwareConfigUpdatedHooks[i] = nullptr;
+        hardwareConfigUpdatedHookParamPtrs[i] = nullptr;
+    }
 }
 
 /**
  * @brief Default destructor, which cleans up allocated data.
  */
-SettingsManager::~SettingsManager(void)
+SettingsManager::~SettingsManager()
 {
-    if(configMutex) vSemaphoreDelete(configMutex);
-    if(fileIoMutex) vSemaphoreDelete(fileIoMutex);
+    if (configMutex) vSemaphoreDelete(configMutex);
+    if (fileIoMutex) vSemaphoreDelete(fileIoMutex);
+    if (hookMutex) vSemaphoreDelete(hookMutex);
 }
 
-void SettingsManager::clearZoneData(settings_container_t& settings)
+void SettingsManager::init()
+{
+    // setup default data so defaults are available as soon as possible
+    ESP_LOGD(logTag, "Loading default configuration.");
+    updateIrrigationConfig((const char*) irrigationConfig_default_json_start, irrigationConfig_default_json_end - irrigationConfig_default_json_start + 1, true);
+    updateHardwareConfig((const char*) hardwareConfig_default_json_start, hardwareConfig_default_json_end - hardwareConfig_default_json_start + 1, true);
+}
+
+void SettingsManager::clearZoneData(irrigation_config_t& settings)
 {
     for(int i = 0; i < irrigationPlannerNumZones; i++) {
         settings.zones[i].name[irrigationZoneCfgNameLen] = '\0';
@@ -36,7 +60,7 @@ void SettingsManager::clearZoneData(settings_container_t& settings)
     }
 }
 
-void SettingsManager::clearEventData(settings_container_t& settings)
+void SettingsManager::clearEventData(irrigation_config_t& settings)
 {
     for(int i = 0; i < irrigationPlannerNumNormalEvents; i++) {
         settings.eventsUsed[i] = false;
@@ -171,7 +195,7 @@ SettingsManager::err_t SettingsManager::jsonParseEvent(cJSON* evtJson, Irrigatio
     return ret;
 }
 
-SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const jsonData, int jsonDataLen)
+SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const jsonData, int jsonDataLen, bool noNotify)
 {
     err_t ret = ERR_OK;
     static char jsonStr[8192]; // data is not a NULL-terminated string, therefore we need to pre-process it
@@ -184,7 +208,7 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
         ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
         ret = ERR_TIMEOUT;
     } else {
-        static settings_container_t settingsTemp;
+        static irrigation_config_t settingsTemp;
 
         pwrMgr.setKeepAwakeForce(true);
 
@@ -245,31 +269,128 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
 
         if(ret == ERR_OK) {
             ESP_LOGD(logTag, "Zone and event data successfully parsed.");
-            memcpy(shadowData.zones, settingsTemp.zones, sizeof(irrigation_zone_cfg_t) * irrigationZoneCfgElements);
+            memcpy(shadowDataIrrigationConfig.zones, settingsTemp.zones, sizeof(irrigation_zone_cfg_t) * irrigationZoneCfgElements);
             for(int i = 0; i < irrigationPlannerNumNormalEvents; i++) {
-                shadowData.events[i] = settingsTemp.events[i];
-                shadowData.eventsUsed[i] = settingsTemp.eventsUsed[i];
+                shadowDataIrrigationConfig.events[i] = settingsTemp.events[i];
+                shadowDataIrrigationConfig.eventsUsed[i] = settingsTemp.eventsUsed[i];
             }
         }
 
         cJSON* storePersistentPtr = cJSON_GetObjectItem(root, "storePersistent");
         if( (nullptr != storePersistentPtr) && cJSON_IsBool(storePersistentPtr) && cJSON_IsTrue(storePersistentPtr) ) {
-            ESP_LOGI(logTag, "Persistent storage of irrigation configuration requested.");
+            ESP_LOGI(logTag, "Persistent storage of irrigation config requested.");
 
             cJSON_DetachItemViaPointer(root, storePersistentPtr);
 
             char* jsonStrModified = cJSON_Print(root);
             int jsonStrModifiedLen = strlen(jsonStrModified);
 
-            if (ERR_OK != writeIrrigationConfigFile(jsonStrModified, jsonStrModifiedLen)) {
+            if (ERR_OK != writeConfigFile(filenameIrrigationConfig, jsonStrModified, jsonStrModifiedLen)) {
                 ret = ERR_FILE_IO;
             }
         }
 
         xSemaphoreGive(configMutex);
 
+        if((ret == ERR_OK) && !noNotify) {
+            callIrrigConfigUpdatedHooks();
+        }
+
+        pwrMgr.setKeepAwakeForce(false);
+    }
+
+    return ret;
+}
+
+SettingsManager::err_t SettingsManager::updateHardwareConfig(const char* const jsonData, int jsonDataLen, bool noNotify)
+{
+    err_t ret = ERR_OK;
+    static char jsonStr[2048]; // data is not a NULL-terminated string, therefore we need to pre-process it
+
+    if (nullptr == jsonData) return ERR_INVALID_ARG;
+    if (jsonDataLen < 2) return ERR_INVALID_ARG; // check for minimum data length ("{}")
+    if (jsonDataLen > (sizeof(jsonStr) - 1)) return ERR_INVALID_ARG; // chekc for maximum buffer space
+
+    if (pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
+        ret = ERR_TIMEOUT;
+    } else {
+        static battery_config_t batteryTemp;
+        static reservoir_config_t reservoirTemp;
+
+        pwrMgr.setKeepAwakeForce(true);
+
+        memcpy(jsonStr, jsonData, sizeof(char) * jsonDataLen);
+        jsonStr[jsonDataLen] = 0;
+
+        cJSON* root = cJSON_ParseWithOpts(jsonStr, nullptr, true);
+        if(nullptr != root) {
+            cJSON* disableBatteryCheckItem = cJSON_GetObjectItem(root, "disableBatteryCheck");
+            cJSON* battCriticalThresholdMilliItem = cJSON_GetObjectItem(root, "battCriticalThresholdMilli");
+            cJSON* battLowThresholdMilliItem = cJSON_GetObjectItem(root, "battLowThresholdMilli");
+            cJSON* battOkThresholdMilliItem =cJSON_GetObjectItem(root, "battOkThresholdMilli");
+            cJSON* disableReservoirCheckItem = cJSON_GetObjectItem(root, "disableReservoirCheck");
+            cJSON* fillLevelMaxValItem = cJSON_GetObjectItem(root, "fillLevelMaxVal");
+            cJSON* fillLevelMinValItem = cJSON_GetObjectItem(root, "fillLevelMinVal");
+            cJSON* fillLevelCriticalThresholdPercent10Item = cJSON_GetObjectItem(root, "fillLevelCriticalThresholdPercent10");
+            cJSON* fillLevelLowThresholdPercent10Item = cJSON_GetObjectItem(root, "fillLevelLowThresholdPercent10");
+            cJSON* fillLevelHysteresisPercent10Item = cJSON_GetObjectItem(root, "fillLevelHysteresisPercent10");
+
+            if( (nullptr != disableBatteryCheckItem) && cJSON_IsBool(disableBatteryCheckItem) &&
+                (nullptr != battCriticalThresholdMilliItem) && cJSON_IsNumber(battCriticalThresholdMilliItem) &&
+                (nullptr != battLowThresholdMilliItem) && cJSON_IsNumber(battLowThresholdMilliItem) &&
+                (nullptr != battOkThresholdMilliItem) && cJSON_IsNumber(battOkThresholdMilliItem) &&
+                (nullptr != disableReservoirCheckItem) && cJSON_IsBool(disableReservoirCheckItem) &&
+                (nullptr != fillLevelMaxValItem) && cJSON_IsNumber(fillLevelMaxValItem) &&
+                (nullptr != fillLevelMinValItem) && cJSON_IsNumber(fillLevelMinValItem) &&
+                (nullptr != fillLevelCriticalThresholdPercent10Item) && cJSON_IsNumber(fillLevelCriticalThresholdPercent10Item) &&
+                (nullptr != fillLevelLowThresholdPercent10Item) && cJSON_IsNumber(fillLevelLowThresholdPercent10Item) &&
+                (nullptr != fillLevelHysteresisPercent10Item) && cJSON_IsNumber(fillLevelHysteresisPercent10Item) )
+            {
+                batteryTemp.disableBatteryCheck = cJSON_IsTrue(disableBatteryCheckItem);
+                batteryTemp.battCriticalThresholdMilli = battCriticalThresholdMilliItem->valueint;
+                batteryTemp.battLowThresholdMilli = battLowThresholdMilliItem->valueint;
+                batteryTemp.battOkThresholdMilli = battOkThresholdMilliItem->valueint;
+
+                reservoirTemp.disableReservoirCheck = cJSON_IsTrue(disableReservoirCheckItem);
+                reservoirTemp.fillLevelMaxVal = fillLevelMaxValItem->valueint;
+                reservoirTemp.fillLevelMinVal = fillLevelMinValItem->valueint;
+                reservoirTemp.fillLevelCriticalThresholdPercent10 = fillLevelCriticalThresholdPercent10Item->valueint;
+                reservoirTemp.fillLevelLowThresholdPercent10 = fillLevelLowThresholdPercent10Item->valueint;
+                reservoirTemp.fillLevelHysteresisPercent10 = fillLevelHysteresisPercent10Item->valueint;
+            } else {
+                ESP_LOGE(logTag, "Some mandatory hardware settings not found.");
+                ret = ERR_SETTINGS_INVALID;
+            }
+        } else {
+            ESP_LOGE(logTag, "Parsing JSON tree failed!");
+            ret = ERR_INVALID_JSON;
+        }
+
         if(ret == ERR_OK) {
-            irrigPlanner.configurationUpdated();
+            ESP_LOGD(logTag, "Hardware config successfully parsed.");
+            copyBatteryConfigInt(&shadowDataBatteryConfig, batteryTemp);
+            copyReservoirConfigInt(&shadowDataReservoirConfig, reservoirTemp);
+        }
+
+        cJSON* storePersistentPtr = cJSON_GetObjectItem(root, "storePersistent");
+        if( (nullptr != storePersistentPtr) && cJSON_IsBool(storePersistentPtr) && cJSON_IsTrue(storePersistentPtr) ) {
+            ESP_LOGI(logTag, "Persistent storage of hardware config requested.");
+
+            cJSON_DetachItemViaPointer(root, storePersistentPtr);
+
+            char* jsonStrModified = cJSON_Print(root);
+            int jsonStrModifiedLen = strlen(jsonStrModified);
+
+            if (ERR_OK != writeConfigFile(filenameHardwareConfig, jsonStrModified, jsonStrModifiedLen)) {
+                ret = ERR_FILE_IO;
+            }
+        }
+
+        xSemaphoreGive(configMutex);
+
+        if((ret == ERR_OK) && !noNotify) {
+            callHardwareConfigUpdatedHooks();
         }
 
         pwrMgr.setKeepAwakeForce(false);
@@ -280,44 +401,82 @@ SettingsManager::err_t SettingsManager::updateIrrigationConfig(const char* const
 
 SettingsManager::err_t SettingsManager::readIrrigationConfigFile()
 {
+    return readConfigFile(CONFIG_FILE_IRRIGATION);
+}
+
+SettingsManager::err_t SettingsManager::readHardwareConfigFile()
+{
+    return readConfigFile(CONFIG_FILE_HARDWARE);
+}
+
+SettingsManager::err_t SettingsManager::readConfigFile(config_file_type_t type)
+{
     err_t ret = ERR_OK;
+    const char* filename;
     static char settingsBuffer[8192];
 
-    struct stat st;
-    if (stat(filenameIrrigationConfig, &st) == 0) {
-        if (pdFALSE == xSemaphoreTake(fileIoMutex, lockAcquireTimeout)) {
-            ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
-            ret = ERR_TIMEOUT;
-        } else {
-            FILE* f = fopen(filenameIrrigationConfig, "r");
-            if (f == NULL) {
-                ESP_LOGW(logTag, "Failed to open irrigation config file for reading.");
-                ret = ERR_FILE_IO;
-            } else {
-                size_t bytesRead;
+    switch(type) {
+        case CONFIG_FILE_IRRIGATION:
+            filename = filenameIrrigationConfig;
+            break;
+        case CONFIG_FILE_HARDWARE:
+            filename = filenameHardwareConfig;
+            break;
+        default:
+            ret = ERR_INVALID_ARG;
+            break;
+    }
 
-                bytesRead = fread(settingsBuffer, sizeof(char), sizeof(settingsBuffer), f);
-                fclose(f);
-
-                if(bytesRead == sizeof(settingsBuffer)) {
-                    ESP_LOGW(logTag, "Irrigation config file too big for read buffer. Not reading it in.");
-                    ret = ERR_FILE_IO;
-                } else if(bytesRead > 0) {
-                    ESP_LOGI(logTag, "Updating irrigation config from file.");
-                    ret = updateIrrigationConfig(settingsBuffer, bytesRead);
-                }
-            }
-            xSemaphoreGive(fileIoMutex);
-        }
+    if (ret != ERR_OK) {
+        ESP_LOGE(logTag, "Invalid config file type specified.");
     } else {
-        ESP_LOGW(logTag, "Irrigation config file doesn't exist.");
-        ret = ERR_FILE_IO;
+        struct stat st;
+        if (stat(filename, &st) == 0) {
+            if (pdFALSE == xSemaphoreTake(fileIoMutex, lockAcquireTimeout)) {
+                ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
+                ret = ERR_TIMEOUT;
+            } else {
+                FILE* f = fopen(filename, "r");
+                if (f == NULL) {
+                    ESP_LOGW(logTag, "Failed to open irrigation config file for reading.");
+                    ret = ERR_FILE_IO;
+                } else {
+                    size_t bytesRead;
+
+                    bytesRead = fread(settingsBuffer, sizeof(char), sizeof(settingsBuffer), f);
+                    fclose(f);
+
+                    if(bytesRead == sizeof(settingsBuffer)) {
+                        ESP_LOGW(logTag, "Config file too big for read buffer. Not reading it in.");
+                        ret = ERR_FILE_IO;
+                    } else if(bytesRead > 0) {
+                        switch(type) {
+                            case CONFIG_FILE_IRRIGATION:
+                                ESP_LOGI(logTag, "Updating irrigation config from file.");
+                                ret = updateIrrigationConfig(settingsBuffer, bytesRead, true);
+                                break;
+                            case CONFIG_FILE_HARDWARE:
+                                ESP_LOGI(logTag, "Updating hardware config from file.");
+                                ret = updateHardwareConfig(settingsBuffer, bytesRead, true);
+                                break;
+                            default:
+                                ret = ERR_INVALID_ARG;
+                                break;
+                        }
+                    }
+                }
+                xSemaphoreGive(fileIoMutex);
+            }
+        } else {
+            ESP_LOGW(logTag, "Config file doesn't exist.");
+            ret = ERR_FILE_IO;
+        }
     }
 
     return ret;
 }
 
-SettingsManager::err_t SettingsManager::writeIrrigationConfigFile(const char* const jsonData, int jsonDataLen)
+SettingsManager::err_t SettingsManager::writeConfigFile(const char* const filename, const char* const jsonData, int jsonDataLen)
 {
     err_t ret = ERR_OK;
 
@@ -325,9 +484,9 @@ SettingsManager::err_t SettingsManager::writeIrrigationConfigFile(const char* co
         ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
         ret = ERR_TIMEOUT;
     } else {
-        FILE* f = fopen(filenameIrrigationConfig, "w");
+        FILE* f = fopen(filename, "w");
         if (f == NULL) {
-            ESP_LOGW(logTag, "Failed to open irrigation config file for writing.");
+            ESP_LOGW(logTag, "Failed to open config file for writing.");
             ret = ERR_FILE_IO;
         } else {
             size_t bytesWritten;
@@ -336,11 +495,11 @@ SettingsManager::err_t SettingsManager::writeIrrigationConfigFile(const char* co
             fclose(f);
 
             if(bytesWritten != jsonDataLen) {
-                ESP_LOGW(logTag, "Error writing irrigation config file. Deleting it.");
-                unlink(filenameIrrigationConfig);
+                ESP_LOGW(logTag, "Error writing config file. Deleting it.");
+                unlink(filename);
                 ret = ERR_FILE_IO;
             } else {
-                ESP_LOGI(logTag, "Irrigation config file written successfully.");
+                ESP_LOGI(logTag, "Config file written successfully.");
             }
 
         }
@@ -363,15 +522,151 @@ SettingsManager::err_t SettingsManager::copyZonesAndEvents(
         ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
         ret = ERR_TIMEOUT;
     } else {
-        memcpy(zones, shadowData.zones, sizeof(irrigation_zone_cfg_t) * irrigationZoneCfgElements);
+        memcpy(zones, shadowDataIrrigationConfig.zones, sizeof(irrigation_zone_cfg_t) * irrigationZoneCfgElements);
         // TBD: handling of single shot event; currently not implemented in IrrigationPlanner
         for(int i = 0; i < irrigationPlannerNumNormalEvents; i++) {
-            events[i] = shadowData.events[i];
-            eventsUsed[i] = shadowData.eventsUsed[i];
+            events[i] = shadowDataIrrigationConfig.events[i];
+            eventsUsed[i] = shadowDataIrrigationConfig.eventsUsed[i];
         }
 
         xSemaphoreGive(configMutex);
     }
 
     return ret;
+}
+
+void SettingsManager::copyBatteryConfigInt(battery_config_t* dst, battery_config_t& src)
+{
+    dst->disableBatteryCheck = src.disableBatteryCheck;
+    dst->battCriticalThresholdMilli = src.battCriticalThresholdMilli;
+    dst->battLowThresholdMilli = src.battLowThresholdMilli;
+    dst->battOkThresholdMilli = src.battOkThresholdMilli;
+}
+
+void SettingsManager::copyReservoirConfigInt(reservoir_config_t* dst, reservoir_config_t& src)
+{
+    dst->disableReservoirCheck = src.disableReservoirCheck;
+    dst->fillLevelMaxVal = src.fillLevelMaxVal;
+    dst->fillLevelMinVal = src.fillLevelMinVal;
+    dst->fillLevelCriticalThresholdPercent10 = src.fillLevelCriticalThresholdPercent10;
+    dst->fillLevelLowThresholdPercent10 = src.fillLevelLowThresholdPercent10;
+    dst->fillLevelHysteresisPercent10 = src.fillLevelHysteresisPercent10;
+}
+
+SettingsManager::err_t SettingsManager::copyBatteryConfig(battery_config_t* dst)
+{
+    err_t ret = ERR_OK;
+
+    if(nullptr == dst) return ERR_INVALID_ARG;
+
+    if(pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
+        ret = ERR_TIMEOUT;
+    } else {
+        copyBatteryConfigInt(dst, shadowDataBatteryConfig);
+        xSemaphoreGive(configMutex);
+    }
+
+    return ret;
+}
+
+SettingsManager::err_t SettingsManager::copyReservoirConfig(reservoir_config_t* dst)
+{
+    err_t ret = ERR_OK;
+
+    if(nullptr == dst) return ERR_INVALID_ARG;
+
+    if(pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
+        ret = ERR_TIMEOUT;
+    } else {
+        copyReservoirConfigInt(dst, shadowDataReservoirConfig);
+        xSemaphoreGive(configMutex);
+    }
+
+    return ret;
+}
+
+SettingsManager::err_t SettingsManager::registerIrrigConfigUpdatedHook(ConfigUpdatedHookFncPtr hook, void* param)
+{
+    err_t ret = ERR_OK;
+
+    if(pdFALSE == xSemaphoreTake(hookMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire hook lock within timeout!");
+        ret = ERR_TIMEOUT;
+    } else {
+        bool slotFound = false;
+        for (int i=0; i<numHookTableEntries; i++) {
+            if (nullptr == irrigConfigUpdatedHooks[i]) {
+                slotFound = true;
+                irrigConfigUpdatedHooks[i] = hook;
+                irrigConfigUpdatedHookParamPtrs[i] = param;
+                break;
+            }
+        }
+        if (!slotFound) {
+            ESP_LOGE(logTag, "No free irrigConfigUpdatedHooks slot found.");
+            ret = ERR_NO_RESOURCES;
+        }
+
+        xSemaphoreGive(hookMutex);
+    }
+
+    return ret;
+}
+
+SettingsManager::err_t SettingsManager::registerHardwareConfigUpdatedHook(ConfigUpdatedHookFncPtr hook, void* param)
+{
+    err_t ret = ERR_OK;
+
+    if(pdFALSE == xSemaphoreTake(hookMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire hook lock within timeout!");
+        ret = ERR_TIMEOUT;
+    } else {
+        bool slotFound = false;
+        for (int i=0; i<numHookTableEntries; i++) {
+            if (nullptr == hardwareConfigUpdatedHooks[i]) {
+                slotFound = true;
+                hardwareConfigUpdatedHooks[i] = hook;
+                hardwareConfigUpdatedHookParamPtrs[i] = param;
+                break;
+            }
+        }
+        if (!slotFound) {
+            ESP_LOGE(logTag, "No free hardwareConfigUpdatedHooks slot found.");
+            ret = ERR_NO_RESOURCES;
+        }
+
+        xSemaphoreGive(hookMutex);
+    }
+
+    return ret;
+}
+
+void SettingsManager::callIrrigConfigUpdatedHooks()
+{
+    if(pdFALSE == xSemaphoreTake(hookMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire hook lock within timeout!");
+    } else {
+        for (int i=0; i<numHookTableEntries; i++) {
+            if (nullptr != irrigConfigUpdatedHooks[i]) {
+                irrigConfigUpdatedHooks[i](irrigConfigUpdatedHookParamPtrs[i]);
+            }
+        }
+        xSemaphoreGive(hookMutex);
+    }
+}
+
+void SettingsManager::callHardwareConfigUpdatedHooks()
+{
+    if(pdFALSE == xSemaphoreTake(hookMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire hook lock within timeout!");
+    } else {
+        for (int i=0; i<numHookTableEntries; i++) {
+            if (nullptr != hardwareConfigUpdatedHooks[i]) {
+                hardwareConfigUpdatedHooks[i](hardwareConfigUpdatedHookParamPtrs[i]);
+            }
+        }
+        xSemaphoreGive(hookMutex);
+    }
 }

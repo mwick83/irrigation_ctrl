@@ -25,6 +25,12 @@
 #include "iap_https.h"
 #include "cJSON.h"
 
+#define MIN(a, b) ((a <= b) ? a : b)
+
+#ifndef OTA_METADATA_FILE
+#define OTA_METADATA_FILE "unknown.bin"
+#endif
+
 // ********************************************************************
 // global objects, vars and prototypes
 // ********************************************************************
@@ -34,6 +40,7 @@ EventGroupHandle_t wifiEvents;
 const int wifiEventConnected = (1<<0);
 const int wifiEventDisconnected = (1<<1);
 
+SettingsManager settingsMgr;
 FillSensorPacketizer fillSensorPacketizer;
 FillSensorProtoHandler<FillSensorPacketizer> fillSensor(&fillSensorPacketizer);
 PowerManager pwrMgr;
@@ -41,7 +48,6 @@ OutputController outputCtrl;
 MqttManager mqttMgr;
 IrrigationController irrigCtrl;
 IrrigationPlanner irrigPlanner;
-SettingsManager settingsMgr;
 
 // ********************************************************************
 // WiFi handling
@@ -309,44 +315,63 @@ esp_err_t initializeSpiffs(void)
 // ********************************************************************
 // settings manager helpers
 // ********************************************************************
-extern const uint8_t irrigationConfig_default_json_start[] asm("_binary_irrigationConfig_default_json_start");
-extern const uint8_t irrigationConfig_default_json_end[] asm("_binary_irrigationConfig_default_json_end");
-
-#define MQTT_CONFIG_IRRIG_TOPIC_PRE              "whan/irrigation/"
-#define MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN          16
+#define MQTT_CONFIG_TOPIC_PRE                    "whan/irrigation/"
+#define MQTT_CONFIG_TOPIC_PRE_LEN                16
 #define MQTT_CONFIG_IRRIG_TOPIC_POST_SET         "/irrig_config/set"
 #define MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN     17
+#define MQTT_CONFIG_HARDWARE_TOPIC_POST_SET      "/hardware_config/set"
+#define MQTT_CONFIG_HARDWARE_TOPIC_POST_SET_LEN  20
 void mqttIrrigConfigSetCallback(const char* topic, int topicLen, const char* data, int dataLen);
+void mqttHardwareConfigSetCallback(const char* topic, int topicLen, const char* data, int dataLen);
 
 esp_err_t initializeSettingsMgr(void)
 {
     esp_err_t ret = ESP_OK;
 
-    // try to read irrigation config file from SPIFFS
-    if (SettingsManager::ERR_OK != settingsMgr.readIrrigationConfigFile()) {
-        // setup default data
-        settingsMgr.updateIrrigationConfig((const char*) irrigationConfig_default_json_start, irrigationConfig_default_json_end - irrigationConfig_default_json_start + 1);
-    }
+    settingsMgr.init();
 
-    // subscribe to the irrigation config topic
-    static char otaTopic[MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN + MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN + 12 + 1];
+    // try to read config files from SPIFFS
+    settingsMgr.readIrrigationConfigFile();
+    settingsMgr.readHardwareConfigFile();
+
+    // subscribe to the config topics
+    static char irrigTopic[MQTT_CONFIG_TOPIC_PRE_LEN + MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN + 12 + 1];
+    static char hardwareTopic[MQTT_CONFIG_TOPIC_PRE_LEN + MQTT_CONFIG_HARDWARE_TOPIC_POST_SET_LEN + 12 + 1];
     static uint8_t mac_addr[6];
 
     ret = esp_wifi_get_mac(ESP_IF_WIFI_STA, mac_addr);
 
     if(ESP_OK == ret) {
-        memcpy(otaTopic, MQTT_CONFIG_IRRIG_TOPIC_PRE, MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN);
+        // subscribe to the irrigation config topic
+        memcpy(irrigTopic, MQTT_CONFIG_TOPIC_PRE, MQTT_CONFIG_TOPIC_PRE_LEN);
         for(int i=0; i<6; i++) {
-            sprintf(&otaTopic[MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN + i*2], "%02x", mac_addr[i]);
+            sprintf(&irrigTopic[MQTT_CONFIG_TOPIC_PRE_LEN + i*2], "%02x", mac_addr[i]);
         }
-        memcpy(&otaTopic[MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN + 12], MQTT_CONFIG_IRRIG_TOPIC_POST_SET, MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN);
-        otaTopic[MQTT_CONFIG_IRRIG_TOPIC_PRE_LEN + MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN + 12] = 0;
+
+        memcpy(&irrigTopic[MQTT_CONFIG_TOPIC_PRE_LEN + 12], MQTT_CONFIG_IRRIG_TOPIC_POST_SET, MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN);
+        irrigTopic[MQTT_CONFIG_TOPIC_PRE_LEN + MQTT_CONFIG_IRRIG_TOPIC_POST_SET_LEN + 12] = 0;
         
-        if(MqttManager::ERR_OK != mqttMgr.subscribe(otaTopic, MqttManager::QOS_EXACTLY_ONCE, mqttIrrigConfigSetCallback)) {
-            ESP_LOGW(LOG_TAG_OTA, "Failed to subscribe to irrigation config topic!");
+        if(MqttManager::ERR_OK != mqttMgr.subscribe(irrigTopic, MqttManager::QOS_EXACTLY_ONCE, mqttIrrigConfigSetCallback)) {
+            ESP_LOGW(LOG_TAG_MQTT_CFG_SETUP, "Failed to subscribe to irrigation config topic!");
+            ret = -1;
+        }
+
+        // subscribe to the hardware config topic
+        memcpy(hardwareTopic, MQTT_CONFIG_TOPIC_PRE, MQTT_CONFIG_TOPIC_PRE_LEN);
+        for(int i=0; i<6; i++) {
+            sprintf(&hardwareTopic[MQTT_CONFIG_TOPIC_PRE_LEN + i*2], "%02x", mac_addr[i]);
+        }
+
+        memcpy(&hardwareTopic[MQTT_CONFIG_TOPIC_PRE_LEN + 12], MQTT_CONFIG_HARDWARE_TOPIC_POST_SET, MQTT_CONFIG_HARDWARE_TOPIC_POST_SET_LEN);
+        hardwareTopic[MQTT_CONFIG_TOPIC_PRE_LEN + MQTT_CONFIG_HARDWARE_TOPIC_POST_SET_LEN + 12] = 0;
+
+        if(MqttManager::ERR_OK != mqttMgr.subscribe(hardwareTopic, MqttManager::QOS_EXACTLY_ONCE, mqttHardwareConfigSetCallback)) {
+            ESP_LOGW(LOG_TAG_MQTT_CFG_SETUP, "Failed to subscribe to hardware config topic!");
+            ret = -1;
         }
     } else {
-        ESP_LOGW(LOG_TAG_OTA, "Failed to get WiFi MAC address for irrigation config topic subscription.");
+        ESP_LOGW(LOG_TAG_MQTT_CFG_SETUP, "Failed to get WiFi MAC address for irrigation config topic subscription.");
+        ret = -1;
     }
 
     return ret;
@@ -364,6 +389,18 @@ void mqttIrrigConfigSetCallback(const char* topic, int topicLen, const char* dat
     // clear the topic, so we won't parse it again
     mqttMgr.publish(topicBuf, nullptr, 0, MqttManager::QOS_EXACTLY_ONCE, true);
 }
+
+void mqttHardwareConfigSetCallback(const char* topic, int topicLen, const char* data, int dataLen)
+{
+    static char topicBuf[MQTT_CONFIG_TOPIC_PRE_LEN+MQTT_CONFIG_HARDWARE_TOPIC_POST_SET_LEN+12+1];
+    strncpy(topicBuf, topic, MIN(sizeof(topicBuf)-1, topicLen));
+    topicBuf[MIN(sizeof(topicBuf), topicLen)] = 0;
+
+    if (SettingsManager::ERR_OK == settingsMgr.updateHardwareConfig(data, dataLen, false)) {
+        // TBD: publish state somewhere
+    }
+    // clear the topic, so we won't parse it again
+    mqttMgr.publish(topicBuf, nullptr, 0, MqttManager::QOS_EXACTLY_ONCE, true);
 }
 
 // ********************************************************************
@@ -400,17 +437,17 @@ extern "C" void app_main()
     // Initialize WiFi, but don't start yet.
     initializeWifi();
 
-    // Prepare global mqtt clientName (needed due to lack of named initializers in C99)
-    // and init the manager.
-    ESP_ERROR_CHECK( initializeMqttMgr() );
-
-    initializeOta();
-
     // Initialize the SPIFFS, which may contain a config file
     ESP_ERROR_CHECK( initializeSpiffs() );
 
     // Initialize settings storage including setup of hooks, initial load from file, etc.
     ESP_ERROR_CHECK( initializeSettingsMgr() );
+
+    // Prepare global mqtt clientName (needed due to lack of named initializers in C99)
+    // and init the manager.
+    ESP_ERROR_CHECK( initializeMqttMgr() );
+
+    initializeOta();
 
     // Start WiFi. Events will start/stop MQTT client
     ESP_ERROR_CHECK( esp_wifi_start() );
@@ -418,6 +455,15 @@ extern "C" void app_main()
     TimeSystem_Init();
 
     ConsoleInit(true, ConsoleStartHook, ConsoleExitHook);
+
+    // Register config hooks for classes that have no init or task startup functions and therefore can't do it
+    // on their own
+    settingsMgr.registerHardwareConfigUpdatedHook(pwrMgr.hardwareConfigUpdatedHookDispatch, &pwrMgr);
+    settingsMgr.registerIrrigConfigUpdatedHook(irrigPlanner.irrigConfigUpdatedHookDispatch, &irrigPlanner);
+
+    // ... and initiate an initial settings update for them
+    pwrMgr.hardwareConfigUpdated();
+    irrigPlanner.irrigConfigUpdated();
 
     irrigCtrl.start();
 }

@@ -47,7 +47,7 @@ IrrigationController::IrrigationController(void)
     // IrrigationPlanner instance will be created before the TimeSystem is initialized.
     extEvents = xEventGroupCreate();
 
-    if(NULL == extEvents) {
+    if (nullptr == extEvents) {
         ESP_LOGE(logTag, "extEvents event group couldn't be created.");
     }
 }
@@ -67,11 +67,14 @@ IrrigationController::~IrrigationController(void)
  */
 void IrrigationController::start(void)
 {
-    if(NULL == extEvents) {
+    if (nullptr == extEvents) {
         ESP_LOGE(logTag, "Needed resources haven't been allocated. Not starting the task.");
     } else {
+        // initially signalize a hardware config change, so it gets immediatly processed in the task function
+        hardwareConfigUpdatedEventHandler();
+
         taskHandle = xTaskCreateStatic(taskFuncDispatch, "irrig_ctrl_task", taskStackSize, (void*) this, taskPrio, taskStack, &taskBuf);
-        if(NULL != taskHandle) {
+        if (nullptr != taskHandle) {
             ESP_LOGI(logTag, "IrrigationController task created. Starting.");
         } else {
             ESP_LOGE(logTag, "IrrigationController task creation failed!");
@@ -149,7 +152,8 @@ void IrrigationController::taskFunc()
 
     // Register event hooks
     TimeSystem_RegisterHook(timeSytemEventsHookDispatch, this);
-    irrigPlanner.registerConfigurationUpdatedHook(irrigConfigUpdatedHookDispatch, this);
+    irrigPlanner.registerIrrigPlanUpdatedHook(irrigConfigUpdatedHookDispatch, this);
+    settingsMgr.registerHardwareConfigUpdatedHook(hardwareConfigUpdatedHookDispatch, this);
 
     while(1) {
         loopStartTicks = xTaskGetTickCount();
@@ -157,6 +161,24 @@ void IrrigationController::taskFunc()
         // feed the emergency timer
         if(pdPASS != xTimerReset(emergencyTimerHandle, 10)) {
             ESP_LOGW(logTag, "Couldn't feed the emergency timer.");
+        }
+
+        // check for hardware config changes
+        events = xEventGroupClearBits(extEvents, extEventHardwareConfigUpdated);
+        if(0 != (events & extEventHardwareConfigUpdated)) {
+            ESP_LOGI(logTag, "Hardware config update detected.");
+
+            SettingsManager::battery_config_t batConf;
+            SettingsManager::reservoir_config_t reservoirConf;
+            settingsMgr.copyBatteryConfig(&batConf);
+            settingsMgr.copyReservoirConfig(&reservoirConf);
+            disableBatteryCheck = batConf.disableBatteryCheck;
+            disableReservoirCheck = reservoirConf.disableReservoirCheck;
+            fillLevelMaxVal = reservoirConf.fillLevelMaxVal;
+            fillLevelMinVal = reservoirConf.fillLevelMinVal;
+            fillLevelCriticalThresholdPercent10 = reservoirConf.fillLevelCriticalThresholdPercent10;
+            fillLevelLowThresholdPercent10 = reservoirConf.fillLevelLowThresholdPercent10;
+            fillLevelHysteresisPercent10 = reservoirConf.fillLevelHysteresisPercent10;
         }
 
         // *********************
@@ -301,7 +323,7 @@ void IrrigationController::taskFunc()
                 outputCtrl.disableAllOutputs();
             }
             if (0 != (events & extEventIrrigConfigUpdated)) {
-                ESP_LOGI(logTag, "Irrigation configuration update detected.");
+                ESP_LOGI(logTag, "Irrigation config update detected.");
                 // Note: Special handling of extEventIrrigConfigUpdated not needed, because getNextEventTime is done unconditionally
             }
 
@@ -311,7 +333,7 @@ void IrrigationController::taskFunc()
 
             // lock the configuration before an event starts (incl. some guard time)
             if ((nextIrrigEvent != 0) && (millisTillNextEvent <= preEventMillis)) {
-                ESP_LOGD(logTag, "Event is approaching. Locking configuration.");
+                ESP_LOGD(logTag, "Event is approaching. Locking config.");
                 irrigPlanner.setConfigLock(true);
             }
             else if (!outputCtrl.anyOutputsActive() && irrigPlanner.getConfigLock()) {
@@ -788,14 +810,14 @@ void IrrigationController::irrigConfigUpdatedHookDispatch(void* param)
     IrrigationController* controller = (IrrigationController*) param;
 
     if(nullptr == controller) {
-        ESP_LOGE("unkown", "No valid IrrigationController available to dispatch time system events to!");
+        ESP_LOGE("unkown", "No valid IrrigationController available to dispatch irrigation config events to!");
     } else {
         controller->irrigConfigUpdatedEventHandler();
     }
 }
 
 /**
- * @brief This function handles events when a configuration update has been received.
+ * @brief This function handles events when a irrigation config update has been received.
  * 
  * This is important for the main processing thread to properly react to schedule
  * updates.
@@ -807,6 +829,31 @@ void IrrigationController::irrigConfigUpdatedEventHandler()
     xEventGroupSetBits(extEvents, extEventIrrigConfigUpdated);
 }
 
+/**
+ * @brief Static hook dispatcher, which delegates hardware config update events to the correct IrrigationController
+ * instance.
+ * 
+ * @param param Pointer to the actual IrrigationController instance
+ */
+void IrrigationController::hardwareConfigUpdatedHookDispatch(void* param)
+{
+    IrrigationController* controller = (IrrigationController*) param;
+
+    if(nullptr == controller) {
+        ESP_LOGE("unkown", "No valid IrrigationController available to dispatch hardware config events to!");
+    } else {
+        controller->hardwareConfigUpdatedEventHandler();
+    }
+}
+
+/**
+ * @brief This function handles events when a hardware config update has been received.
+ */
+void IrrigationController::hardwareConfigUpdatedEventHandler()
+{
+    // set an event group bit for the processing task
+    xEventGroupSetBits(extEvents, extEventHardwareConfigUpdated);
+}
 
 /**
  * @brief Emergency reboot timer callback, which will simply reset the device

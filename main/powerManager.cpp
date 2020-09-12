@@ -2,6 +2,8 @@
 
 #include <limits>
 
+#include "globalComponents.h"
+
 PowerManager::PowerManager()
 {
     // setup ADC for battery voltage conversion
@@ -231,4 +233,34 @@ bool PowerManager::gotoSleep(uint32_t ms)
 
 void PowerManager::reboot(void) {
     esp_restart();
+}
+
+void PowerManager::hardwareConfigUpdatedHookDispatch(void* param)
+{
+    PowerManager* manager = (PowerManager*) param;
+
+    if(nullptr == manager) {
+        ESP_LOGE("unkown", "No valid PowerManager available to dispatch hardware config events to!");
+    } else {
+        manager->hardwareConfigUpdated();
+    }
+
+
+}
+
+void PowerManager::hardwareConfigUpdated()
+{
+    ESP_LOGI(logTag, "Hardware config update notification received.");
+
+    if (pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
+    } else {
+        SettingsManager::battery_config_t batConf;
+        settingsMgr.copyBatteryConfig(&batConf);
+        battCriticalThresholdMilli = batConf.battCriticalThresholdMilli;
+        battLowThresholdMilli = batConf.battLowThresholdMilli;
+        battOkThresholdMilli = batConf.battOkThresholdMilli;
+
+        xSemaphoreGive(configMutex);
+    }
 }

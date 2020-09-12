@@ -56,6 +56,10 @@ private:
     SemaphoreHandle_t configMutex;
     StaticSemaphore_t configMutexBuf;
 
+    int battCriticalThresholdMilli = 1;
+    int battLowThresholdMilli = 2;
+    int battOkThresholdMilli = 3;
+
 public:
     typedef enum {
         BATT_FULL = 0,
@@ -84,6 +88,9 @@ public:
 
     bool gotoSleep(uint32_t ms);
     void reboot(void);
+
+    static void hardwareConfigUpdatedHookDispatch(void* param);
+    void hardwareConfigUpdated();
 };
 
 #endif /* POWER_MANAGER_H */

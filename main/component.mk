@@ -5,7 +5,7 @@
 
 COMPONENT_ADD_INCLUDEDIRS := . include
 
-COMPONENT_EMBED_TXTFILES := ota_root_ca_cert.pem ota_host_public_key.pem irrigationConfig.default.json
+COMPONENT_EMBED_TXTFILES := ota_root_ca_cert.pem ota_host_public_key.pem irrigationConfig.default.json hardwareConfig.default.json
 
 # override the default build target to update version.h if needed
 build: $(COMPONENT_PATH)/include/version.h $(COMPONENT_LIBRARY)
