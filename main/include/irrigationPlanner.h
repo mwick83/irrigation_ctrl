@@ -58,7 +58,7 @@ public:
     void setConfigLock(bool lockState);
     bool getConfigLock();
 
-    err_t getZoneConfigPtr(int idx, irrigation_zone_cfg_t** cfg);
+    err_t getZoneConfig(int idx, irrigation_zone_cfg_t* cfg);
 
     static void irrigConfigUpdatedHookDispatch(void* param);
     void irrigConfigUpdated();

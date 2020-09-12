@@ -375,22 +375,23 @@ void IrrigationController::taskFunc()
                         if(IrrigationPlanner::ERR_OK != plannerErr) {
                             ESP_LOGE(logTag, "Error getting event data: %d. No actions available!", plannerErr);
                         } else {
-                            irrigation_zone_cfg_t* zoneCfg = nullptr;
-                            plannerErr = irrigPlanner.getZoneConfigPtr(eventData.zoneIdx, &zoneCfg);
+                            static irrigation_zone_cfg_t zoneCfg;
+                            plannerErr = irrigPlanner.getZoneConfig(eventData.zoneIdx, &zoneCfg);
+                            bool zoneCfgIsValid = true;
                             if(IrrigationPlanner::ERR_OK != plannerErr) {
                                 ESP_LOGE(logTag, "Error getting zone config: %d. No actions available!", plannerErr);
-                                zoneCfg = nullptr;
+                                zoneCfgIsValid = false;
                             }
 
                             bool isStartEvent = eventData.isStart;
                             unsigned int durationSecs = isStartEvent ? eventData.durationSecs : 0;
-                            if(nullptr != zoneCfg) {
+                            if(zoneCfgIsValid) {
                                 for(int i=0; i < irrigationZoneCfgElements; i++) {
-                                    if(zoneCfg->chEnabled[i]) {
+                                    if(zoneCfg.chEnabled[i]) {
                                         ESP_LOGI(logTag, "* Channel: %s, state: %s, duration: %d s, start: %d", 
-                                        CH_MAP_TO_STR(zoneCfg->chNum[i]),
-                                        isStartEvent ? (zoneCfg->chStateStart[i] ? "ON" : "OFF") :
-                                                        (zoneCfg->chStateStop[i] ? "ON" : "OFF"),
+                                        CH_MAP_TO_STR(zoneCfg.chNum[i]),
+                                        isStartEvent ? (zoneCfg.chStateStart[i] ? "ON" : "OFF") :
+                                                        (zoneCfg.chStateStop[i] ? "ON" : "OFF"),
                                         durationSecs, isStartEvent);
                                     }
                                 }
@@ -401,8 +402,8 @@ void IrrigationController::taskFunc()
                                 ESP_LOGE(logTag, "Error confirming event: %d. Not performing its actions!", plannerErr);
                             }
 
-                            if((nullptr != zoneCfg) && (IrrigationPlanner::ERR_OK == plannerErr)) {
-                                setZoneOutputs(irrigOk, zoneCfg, isStartEvent);
+                            if((zoneCfgIsValid) && (IrrigationPlanner::ERR_OK == plannerErr)) {
+                                setZoneOutputs(irrigOk, &zoneCfg, isStartEvent);
                             }
                         }
                     } else {

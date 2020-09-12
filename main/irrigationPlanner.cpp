@@ -407,10 +407,7 @@ void IrrigationPlanner::printEventDetails(IrrigationEvent* evt)
     if(IrrigationEvent::ERR_OK != evt->getEventData(&curEventData)) {
         ESP_LOGE(logTag, "Error retrieving event data.");
     } else {
-        if(ERR_OK != getZoneConfigPtr(curEventData.zoneIdx, &curZoneConfig)) {
-            ESP_LOGE(logTag, "Error retrieving zone config.");
-            curZoneConfig = nullptr;
-        }
+        curZoneConfig = &zones[curEventData.zoneIdx];
 
         if(nullptr != curZoneConfig) {
             bool isStartEvent = curEventData.isStart;
@@ -451,13 +448,13 @@ void IrrigationPlanner::printAllEvents()
     ESP_LOGD(logTag, "**************************");
 }
 
-IrrigationPlanner::err_t IrrigationPlanner::getZoneConfigPtr(int idx, irrigation_zone_cfg_t** cfg)
+IrrigationPlanner::err_t IrrigationPlanner::getZoneConfig(int idx, irrigation_zone_cfg_t* cfg)
 {
     if((idx < 0) || (idx >= irrigationZoneCfgElements)) {
         return ERR_INVALID_ZONE_IDX;
     }
 
-    *cfg = &zones[idx];
+    *cfg = zones[idx];
 
     return ERR_OK;
 }
