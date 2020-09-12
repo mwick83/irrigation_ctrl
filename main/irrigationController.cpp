@@ -193,7 +193,18 @@ void IrrigationController::taskFunc()
 
         // Get fill level of the reservoir, if not disabled.
         if(!disableReservoirCheck) {
-            state.fillLevel = fillSensor.getFillLevel(8, 100);
+            int fillLevelMm = fillSensor.getFillLevel(8, 100);
+            int fillLevel = 0;
+
+            if(fillLevel < fillLevelMinVal) fillLevel = fillLevelMinVal;
+            if(fillLevel > fillLevelMaxVal) fillLevel = fillLevelMaxVal;
+            fillLevel = (fillLevelMm - fillLevelMinVal);
+            fillLevel = fillLevel * 1000 / fillLevelMaxVal;
+
+            if(fillLevel > 1000) fillLevel = 1000;
+            if(fillLevel < 0) fillLevel = 0;
+
+            state.fillLevel = fillLevel;
             state.reservoirState = irrigCtrlPersistentData.reservoirState; // keep previous state by default
 
             if ((irrigCtrlPersistentData.reservoirState == RESERVOIR_OK) ||

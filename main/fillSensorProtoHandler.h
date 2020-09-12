@@ -95,18 +95,8 @@ public:
                     while(polls >= 0) {
                         if(pdPASS == xQueueReceive(rxPacketQueue, &rxPacketBuf, wait)) {
                             if((rxPacketBuf.len == 5) && (PROTO_TYPE_FILL_LEVEL_IND == rxPacketBuf.data[0])) {
-                                int fillLevelRaw = 0;
-                                memcpy(&fillLevelRaw, &rxPacketBuf.data[1], 4);
-
-                                if(fillLevel < fillLevelMinVal) fillLevel = fillLevelMinVal;
-                                if(fillLevel > fillLevelMaxVal) fillLevel = fillLevelMaxVal;
-                                fillLevel = (fillLevelRaw - fillLevelMinVal);
-                                fillLevel = fillLevel * 1000 / fillLevelMaxVal;
-
-                                if(fillLevel > 1000) fillLevel = 1000;
-                                if(fillLevel < 0) fillLevel = 0;
-
-                                ESP_LOGD(logTag, "Received answer is fill level: %d mm", fillLevelRaw);
+                                memcpy(&fillLevel, &rxPacketBuf.data[1], 4);
+                                ESP_LOGD(logTag, "Received answer is fill level: %d mm", fillLevel);
                                 break;
                             } else if((rxPacketBuf.len == 5) && (PROTO_TYPE_FILL_LEVEL_RAW_IND == rxPacketBuf.data[0])) {
                                 uint32_t rawData;

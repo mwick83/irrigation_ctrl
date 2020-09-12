@@ -134,10 +134,18 @@ private:
     /** Time in minutes after which a time resync via SNTP should be requested in case it failed previously */ // TBD: from config
     const double sntpResyncIntervalFailMinutes = 10;
 
-    /** Can be set to disable the reservoir check when irrigating */ // TBD: from config
-    const bool disableReservoirCheck = false;
-    /** Can be set to disable the battery check when irrigating */ // TBD: from config
-    const bool disableBatteryCheck = false;
+    /** Can be set to disable the reservoir check when irrigating */
+    bool disableReservoirCheck = true;
+    /** Maximum (i.e. completely full) value reported by the fill sensor */
+    int fillLevelMaxVal = 1;
+    /** Minimum (i.e. completely empty) value reported by the fill sensor */
+    int fillLevelMinVal = 0;
+    int fillLevelCriticalThresholdPercent10 = 3;
+    int fillLevelLowThresholdPercent10 = 6;
+    int fillLevelHysteresisPercent10 = 1;
+
+    /** Can be set to disable the battery check when irrigating */
+    bool disableBatteryCheck = true;
 
     /** Internal state representation */
     state_t state;
