@@ -12,30 +12,29 @@ extern "C" {
 #include <stdint.h>
 #include "console.h"
 
-#define CONSOLE_COMMAND_MAX_COMMAND_LENGTH 10		// command only
-#define CONSOLE_COMMAND_MAX_LENGTH 256				// whole command with argument
-#define CONSOLE_COMMAND_MAX_HELP_LENGTH 64			// if this is zero, there will be no  help (XXXOPT: RAM reduction)
+#define CONSOLE_COMMAND_MAX_COMMAND_LENGTH 10       // command only
+#define CONSOLE_COMMAND_MAX_LENGTH 256              // whole command with argument
+#define CONSOLE_COMMAND_HAS_HELP                    // if not defined, commands have no help
 
-#if CONSOLE_COMMAND_MAX_HELP_LENGTH > 0
+#if defined(CONSOLE_COMMAND_HAS_HELP)
     #define HELP(x)  (x)
 #else
     #define HELP(x)	  0
-#endif // CONSOLE_COMMAND_MAX_HELP_LENGTH
+#endif // CONSOLE_COMMAND_HAS_HELP
 
 typedef eCommandResult_T(*ConsoleCommand_T)(const char buffer[]);
 
 typedef struct sConsoleCommandStruct
 {
-    char* name;
+    char const * const name;
     ConsoleCommand_T execute;
-#if CONSOLE_COMMAND_MAX_HELP_LENGTH > 0
-    char help[CONSOLE_COMMAND_MAX_HELP_LENGTH];
+#if defined(CONSOLE_COMMAND_HAS_HELP)
+    char const * const help;
 #else
     uint8_t junk;
-#endif // CONSOLE_COMMAND_MAX_HELP_LENGTH 
+#endif // CONSOLE_COMMAND_HAS_HELP 
 } sConsoleCommandTable_T;
 
-//#define CONSOLE_COMMAND_TABLE_END {"",NULL, HELP("")}
 #define CONSOLE_COMMAND_TABLE_END {NULL,NULL, HELP("")}
 
 const sConsoleCommandTable_T* ConsoleCommandsGetTable(void);
@@ -45,4 +44,3 @@ const sConsoleCommandTable_T* ConsoleCommandsGetTable(void);
 #endif
 
 #endif // CONSOLE_COMMANDS_H
-
