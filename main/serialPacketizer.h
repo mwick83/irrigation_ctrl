@@ -34,10 +34,10 @@ private:
         RX_FSM_STATE_FOOTER = 3
     } RX_FSM_STATE_E;
 
-    const char preamble[2] = {0xaa, 0x55};
+    const char preamble[2] = {0xfe, 0xaa};
     static const int preambleLen = sizeof(preamble) / sizeof(preamble[0]);
 
-    const char postamble[2] = {0x55, 0xaa};
+    const char postamble[2] = {0x55, 0x01};
     static const int postambleLen = sizeof(postamble) / sizeof(postamble[0]);
 
     const unsigned int rxDriverQueueSize = 32;
@@ -141,6 +141,7 @@ private:
 
         static RX_FSM_STATE_E state = RX_FSM_STATE_IDLE;
         static int cnt = 0;
+        static uint8_t len = 0;
         static bool rxEn = false;
 
         ESP_ERROR_CHECK(uart_get_buffered_data_len(portNum, &charsAvail));
@@ -173,31 +174,42 @@ private:
                                 // TBD: return distinctive error code
                                 ret = -1;
                             }
-                        } else {
+                        } else if(cnt == preambleLen) {
                             // length
-                            cnt = curChar;
-
-                            if((curChar <= maxPayloadLen) && (rxBuffer.len == -1)) {
-                                rxEn = true;
-                                rxBuffer.len = cnt;
-                                memset(rxBuffer.data, 0x00, maxPayloadLen);
+                            len = curChar;
+                            cnt++;
+                        } else {
+                            // length inverted
+                            if (curChar != (len ^ 0xff)) {
+                                cnt = 0;
+                                state = RX_FSM_STATE_IDLE;
+                                ESP_LOGW(logTag, "Invalid length/inverted-length combo received.");
+                                // TBD: return distinctive error code
+                                ret = -1;
                             } else {
-                                rxEn = false;
-                                if(curChar > maxPayloadLen) {
-                                    ESP_LOGW(logTag, "Receiving packet length (%d) is too big. Packet will be dropped.", curChar);
-                                    // TBD: return distinctive error code
-                                    ret = -1;
+                                cnt = len;
+                                if((len <= maxPayloadLen) && (rxBuffer.len == -1)) {
+                                    rxEn = true;
+                                    rxBuffer.len = cnt;
+                                    memset(rxBuffer.data, 0x00, maxPayloadLen);
                                 } else {
-                                    ESP_LOGE(logTag, "Receive buffer is not free. This can't happen!");
-                                    // TBD: return distinctive error code
-                                    ret = -1;
+                                    rxEn = false;
+                                    if(len > maxPayloadLen) {
+                                        ESP_LOGW(logTag, "Receiving packet length (%d) is too big. Packet will be dropped.", len);
+                                        // TBD: return distinctive error code
+                                        ret = -1;
+                                    } else {
+                                        ESP_LOGE(logTag, "Receive buffer is not free. This can't happen!");
+                                        // TBD: return distinctive error code
+                                        ret = -1;
+                                    }
                                 }
-                            }
 
-                            if(cnt > 0) {
-                                state = RX_FSM_STATE_DATA;
-                            } else {
-                                state = RX_FSM_STATE_FOOTER;
+                                if(cnt > 0) {
+                                    state = RX_FSM_STATE_DATA;
+                                } else {
+                                    state = RX_FSM_STATE_FOOTER;
+                                }
                             }
                         }
                         break;
@@ -259,17 +271,18 @@ private:
         unsigned int bytesWritten = 0;
         int stat;
         int retries = 1;
-        static uint8_t txBuffer[maxPayloadLen+preambleLen+postambleLen+1];
+        static uint8_t txBuffer[maxPayloadLen+preambleLen+postambleLen+2];
 
         if((len > maxPayloadLen) || (NULL == data)) return -1;
 
         memcpy(txBuffer, preamble, preambleLen);
         txBuffer[preambleLen] = len & 0xff;
-        memcpy(&txBuffer[preambleLen+1], data, len);
-        memcpy(&txBuffer[preambleLen+1+len], postamble, postambleLen);
+        txBuffer[preambleLen+1] = (len ^ 0xff) & 0xff;
+        memcpy(&txBuffer[preambleLen+2], data, len);
+        memcpy(&txBuffer[preambleLen+2+len], postamble, postambleLen);
 
-        while((retries > 0) && (bytesWritten < (len+preambleLen+postambleLen+1))) {
-            stat = uart_write_bytes(portNum, (char*) &txBuffer[bytesWritten], len+preambleLen+postambleLen+1-bytesWritten);
+        while((retries > 0) && (bytesWritten < (len+preambleLen+postambleLen+2))) {
+            stat = uart_write_bytes(portNum, (char*) &txBuffer[bytesWritten], len+preambleLen+postambleLen+2-bytesWritten);
             if(stat < 0) {
                 ESP_ERROR_CHECK(stat);
             } else {
@@ -278,7 +291,7 @@ private:
             retries--;
         }
 
-        if(bytesWritten < (len+preambleLen+postambleLen+1)) {
+        if(bytesWritten < (len+preambleLen+postambleLen+2)) {
             return -1;
         } else {
             return 0;
