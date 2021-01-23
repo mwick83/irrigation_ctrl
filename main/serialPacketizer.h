@@ -268,9 +268,10 @@ private:
 
     int handleTxData(unsigned int len, uint8_t* data)
     {
+        const int retryCntMax = 1;
         unsigned int bytesWritten = 0;
         int stat;
-        int retries = 1;
+        int retries = retryCntMax + 1;
         static uint8_t txBuffer[maxPayloadLen+preambleLen+postambleLen+2];
 
         if((len > maxPayloadLen) || (NULL == data)) return -1;
@@ -285,10 +286,13 @@ private:
             stat = uart_write_bytes(portNum, (char*) &txBuffer[bytesWritten], len+preambleLen+postambleLen+2-bytesWritten);
             if(stat < 0) {
                 ESP_ERROR_CHECK(stat);
+                retries--;
+            } else if (stat == 0) {
+                retries--;
             } else {
                 bytesWritten += stat;
+                retries = retryCntMax + 1;
             }
-            retries--;
         }
 
         if(bytesWritten < (len+preambleLen+postambleLen+2)) {
