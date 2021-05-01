@@ -215,7 +215,7 @@ void IrrigationController::taskFunc()
 
         // Get fill level of the reservoir, if not disabled.
         if(!disableReservoirCheck) {
-            int fillLevelMm = fillSensor.getFillLevel(8, 100);
+            int fillLevelMm = fillSensor.getFillLevel();
             int fillLevel = 0;
 
             if(fillLevel < fillLevelMinVal) fillLevel = fillLevelMinVal;
