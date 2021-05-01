@@ -28,14 +28,10 @@ IrrigationPlanner::IrrigationPlanner()
         stopEventsUsed[i] = false;
     }
 
-    #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
-    printAllEvents();
-    #endif
-
     configUpdatedHook = nullptr;
     configUpdatedHookParamPtr = nullptr;
 
-    configMutex = xSemaphoreCreateMutexStatic(&configMutexBuf);
+    accessMutex = xSemaphoreCreateMutexStatic(&accessMutexBuf);
     hookMutex = xSemaphoreCreateMutexStatic(&hookMutexBuf);
 }
 
@@ -58,7 +54,7 @@ IrrigationPlanner::~IrrigationPlanner()
         stopEventsUsed[i] = false;
     }
 
-    if (configMutex) vSemaphoreDelete(configMutex);
+    if (accessMutex) vSemaphoreDelete(accessMutex);
     if (hookMutex) vSemaphoreDelete(hookMutex);
 }
 
@@ -85,24 +81,30 @@ time_t IrrigationPlanner::getNextEventTime(time_t startTime, bool excludeStartTi
         startTime = mktime(&startTimeTm);
     }
 
-    // getting the index will update all of the reference times as well
-    nextStartEventIdx = getNextEventIdx(startTime, events, eventsUsed, irrigationPlannerNumEvents);
-    nextStopEventIdx = getNextEventIdx(startTime, stopEvents, stopEventsUsed, irrigationPlannerNumStopEvents);
+    if (pdFALSE == xSemaphoreTake(accessMutex, lockAcquireTimeout)) {
+        ESP_LOGE(logTag, "Couldn't acquire access lock within timeout!");
+    } else {
+        // getting the index will update all of the reference times as well
+        nextStartEventIdx = getNextEventIdx(startTime, events, eventsUsed, irrigationPlannerNumEvents);
+        nextStopEventIdx = getNextEventIdx(startTime, stopEvents, stopEventsUsed, irrigationPlannerNumStopEvents);
 
-    if(nextStartEventIdx >= 0) {
-        if(nextStopEventIdx >= 0) {
-            if(events[nextStartEventIdx] < stopEvents[nextStopEventIdx]) {
-                nextEventTime = events[nextStartEventIdx].getNextOccurance();
+        if(nextStartEventIdx >= 0) {
+            if(nextStopEventIdx >= 0) {
+                if(events[nextStartEventIdx] < stopEvents[nextStopEventIdx]) {
+                    nextEventTime = events[nextStartEventIdx].getNextOccurance();
+                } else {
+                    nextEventTime = stopEvents[nextStopEventIdx].getNextOccurance();
+                }
             } else {
-                nextEventTime = stopEvents[nextStopEventIdx].getNextOccurance();
+                nextEventTime = events[nextStartEventIdx].getNextOccurance();
             }
         } else {
-            nextEventTime = events[nextStartEventIdx].getNextOccurance();
+            if(nextStopEventIdx >= 0) {
+                nextEventTime = stopEvents[nextStopEventIdx].getNextOccurance();
+            }
         }
-    } else {
-        if(nextStopEventIdx >= 0) {
-            nextEventTime = stopEvents[nextStopEventIdx].getNextOccurance();
-        }
+
+        xSemaphoreGive(accessMutex);
     }
 
     return nextEventTime;
@@ -459,20 +461,38 @@ IrrigationPlanner::err_t IrrigationPlanner::getZoneConfig(int idx, irrigation_zo
     return ERR_OK;
 }
 
-void IrrigationPlanner::setConfigLock(bool lockState)
+IrrigationPlanner::err_t IrrigationPlanner::setConfigLock(bool lockState)
 {
-    configLock = lockState;
+    err_t ret = ERR_OK;
 
-    if ((lockState == false) && (configUpdatedDuringLock == true)) {
-        ESP_LOGI(logTag, "Config lock released. Performing postponed configuration update.");
-        configUpdatedDuringLock = false;
-        irrigConfigUpdated();
+    if (pdFALSE == xSemaphoreTake(accessMutex, lockAcquireTimeout)) { // TBD: wait infinite?
+            ESP_LOGE(logTag, "Couldn't acquire access lock within timeout!");
+            ret = ERR_TIMEOUT;
+    } else {
+        configLock = lockState;
+
+        if ((lockState == false) && (configUpdatedDuringLock == true)) {
+            ESP_LOGI(logTag, "Config lock released. Performing postponed configuration update.");
+            configUpdatedDuringLock = false;
+            xSemaphoreGive(accessMutex);
+            irrigConfigUpdated();
+        } else {
+            xSemaphoreGive(accessMutex);
+        }
     }
+
+    return ret;
 }
 
 bool IrrigationPlanner::getConfigLock()
 {
-    return configLock;
+    if (pdFALSE == xSemaphoreTake(accessMutex, lockAcquireTimeout)) { // TBD: wait infinite?
+        ESP_LOGE(logTag, "Couldn't acquire access lock within timeout!");
+        return true;
+    } else {
+        xSemaphoreGive(accessMutex);
+        return configLock;
+    }
 }
 
 void IrrigationPlanner::irrigConfigUpdatedHookDispatch(void* param)
@@ -488,17 +508,15 @@ void IrrigationPlanner::irrigConfigUpdatedHookDispatch(void* param)
 
 void IrrigationPlanner::irrigConfigUpdated()
 {
-    // TBD: add configMutex
-
-    if (configLock) {
-        configUpdatedDuringLock = true;
-        ESP_LOGI(logTag, "Irrigation config update notification received during locked state. Postponing update.");
+    if (pdFALSE == xSemaphoreTake(accessMutex, portMAX_DELAY)) {
+        ESP_LOGE(logTag, "Failed to acquire access lock!");
     } else {
-        ESP_LOGI(logTag, "Irrigation config update notification received.");
-
-        if (pdFALSE == xSemaphoreTake(configMutex, lockAcquireTimeout)) {
-            ESP_LOGE(logTag, "Couldn't acquire config lock within timeout!");
+        if (configLock) {
+            configUpdatedDuringLock = true;
+            ESP_LOGI(logTag, "Irrigation config update notification received during locked state. Postponing update.");
         } else {
+            ESP_LOGI(logTag, "Irrigation config update notification received.");
+
             settingsMgr.copyZonesAndEvents(zones, events, eventsUsed);
 
             #ifdef IRRIGATION_PLANNER_PRINT_ALL_EVENTS
@@ -514,7 +532,7 @@ void IrrigationPlanner::irrigConfigUpdated()
                 xSemaphoreGive(hookMutex);
             }
 
-            xSemaphoreGive(configMutex);
+            xSemaphoreGive(accessMutex);
         }
     }
 }

@@ -54,11 +54,10 @@ public:
     err_t getEventHandles(time_t eventTime, event_handle_t* dest, unsigned int maxElements);
     err_t getEventData(event_handle_t handle, IrrigationEvent::irrigation_event_data_t* dest);
     err_t confirmEvent(event_handle_t handle);
-
-    void setConfigLock(bool lockState);
-    bool getConfigLock();
-
     err_t getZoneConfig(int idx, irrigation_zone_cfg_t* cfg);
+
+    err_t setConfigLock(bool lockState);
+    bool getConfigLock();
 
     static void irrigConfigUpdatedHookDispatch(void* param);
     void irrigConfigUpdated();
@@ -83,8 +82,8 @@ private:
 
     const TickType_t lockAcquireTimeout = pdMS_TO_TICKS(1000);          /**< Maximum lock acquisition time in OS ticks. */
 
-    SemaphoreHandle_t configMutex;
-    StaticSemaphore_t configMutexBuf;
+    SemaphoreHandle_t accessMutex;
+    StaticSemaphore_t accessMutexBuf;
 
     SemaphoreHandle_t hookMutex;
     StaticSemaphore_t hookMutexBuf;
